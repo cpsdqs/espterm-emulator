@@ -252,6 +252,9 @@ class Anser {
 
   self.decoration = null
 
+  // add back empty string because this breaks without
+  if (matches[2] === '') nums = ['']
+
   while (nums.length > 0) {
     let num_str = nums.shift()
     let num = parseInt(num_str)
