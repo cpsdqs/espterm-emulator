@@ -1,0 +1,3 @@
+[submodule "ESPTerm"]
+	path = ESPTerm
+	url = https://github.com/MightyPork/ESPTerm
