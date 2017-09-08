@@ -56,6 +56,9 @@ let encode2B = i =>
   String.fromCharCode((i % 127) + 1) +
     String.fromCharCode(Math.floor(i / 127) + 1)
 
+let decode2B = (str, i) =>
+  str.charCodeAt(i) - 1 + (str.charCodeAt(i + 1) - 1) * 127
+
 let getUpdateString = function () {
   let str = 'S'
   str += encode2B(shell.options.height)
@@ -68,7 +71,8 @@ let getUpdateString = function () {
   attributes |= 0b100 * +shell.options.cursorKeysAppMode
   attributes |= 0b1000 * +shell.options.numpadKeysAppMode
   attributes |= 0b10000 * +shell.options.functionKeysMode
-  attributes |= 0b100000 * +shell.options.trackMouseClicks
+  attributes |= 0b100000 * +(shell.options.trackMouseClicks ||
+    shell.terminal.state.alternateBuffer)
   attributes |= 0b1000000 * +shell.options.trackMouseMovement
   attributes |= 0b10000000 * +shell.options.enableButtons
   attributes |= 0b100000000 * +shell.options.enableMenu
@@ -134,10 +138,18 @@ ws.on('connection', (ws, request) => {
       let button = content.charCodeAt(0)
       // what to do?
     } else if (type === 'm' || type === 'p' || type === 'r') {
-      // let row = decode2B(content, 0)
-      // let column = decode2B(content, 2)
-      // let button = decode2B(content, 4)
-      // let modifiers = decode2B(content, 6)
+      let row = decode2B(content, 0)
+      let column = decode2B(content, 2)
+      let button = decode2B(content, 4)
+      let modifiers = decode2B(content, 6)
+
+      if (shell.terminal.state.alternateBuffer && 4 <= button && button <= 5) {
+        if (button === 4) {
+          shell.write('\x1bOA')
+        } else if (button === 5) {
+          shell.write('\x1bOB')
+        }
+      }
     }
   })
 

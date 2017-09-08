@@ -202,15 +202,35 @@ io.Terminal = class Terminal extends EventEmitter {
 
     this.width = width
     this.height = height
+
     this.lines = []
+
+    // alternate buffer
+    this.altLines = []
+
     for (let i = 0; i < this.height; i++) {
       this.lines.push(new io.FormattedString(''))
+      this.altLines.push(new io.FormattedString(''))
     }
+
+
     this.cursorPos = [0, 0]
     this.state = {
       cursorVisible: true,
-      drawing: true
+      alternateBuffer: false,
+      savedCursorPos: null
     }
+  }
+
+  setAlternateBuffer (enabled) {
+    if (enabled !== this.state.alternateBuffer) {
+      this.state.alternateBuffer = enabled
+
+      let altLines = this.altLines
+      this.altLines = this.lines
+      this.lines = altLines
+    }
+    this.draw()
   }
 
   clear () {

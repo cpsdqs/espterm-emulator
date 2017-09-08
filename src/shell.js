@@ -87,7 +87,7 @@ let updateShell = function (data) {
         if (terminal.cursorPos[0] < 0) terminal.cursorPos[0] = 0
       } else if (leadingSpecial === '\x07') {
         if (ignoreNextBell) ignoreNextBell = false
-        else shell.emit('bell')
+        else emitter.emit('bell')
       }
     }
 

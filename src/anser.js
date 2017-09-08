@@ -140,13 +140,13 @@ class Anser {
     } else if (type === 's') {
       // save cursor pos
       result.action = terminal => {
-        this._savedCursorPos = [...terminal.cursorPos]
+        terminal.state.savedCursorPos = [...terminal.cursorPos]
       }
     } else if (type === 'u') {
       // restore cursor pos
       result.action = terminal => {
-        if (this._savedCursorPos) {
-          terminal.cursorPos = this._savedCursorPos
+        if (terminal.state.savedCursorPos) {
+          terminal.cursorPos = terminal.state.savedCursorPos
         }
       }
     } else if (type === 'J') {
@@ -231,10 +231,19 @@ class Anser {
     }
   } else if (type === 'h' || type === 'l') {
     if (matches[1] === '?') {
-      if (nums[0] === '25') {
-        result.action = terminal => {
-          if (type === 'l') terminal.state.cursorVisible = false
-          else terminal.state.cursorVisible = true
+      let mode = +nums[0]
+      result.action = terminal => {
+        if (mode === 25) terminal.state.cursorVisible = type === 'h'
+        else if (1047 <= mode && mode <= 1049) {
+          if (mode === 1047 || mode === 1049) {
+            if (type === 'h') {
+              terminal.state.savedCursorPos = [...terminal.cursorPos]
+              if (mode === 1049) terminal.cursorPos = [0, 0]
+            } else terminal.cursorPos = terminal.state.savedCursorPos
+          }
+          if (mode === 1048 || mode === 1049) {
+            terminal.setAlternateBuffer(type === 'h')
+          }
         }
       }
     }
