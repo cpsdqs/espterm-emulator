@@ -46,7 +46,6 @@ for (let i = 0; i < 256; i++) anser.PALETTE_COLORS.push(i)
 let ignoreNextBell = false
 let updateShell = function (data) {
   data = data.toString()
-  console.log(JSON.stringify(data))
   // regex lookaheads:
   // 1. OSC sequence
   // 2. Designate character set
