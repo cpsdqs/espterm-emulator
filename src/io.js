@@ -77,39 +77,44 @@ io.FormattedString = class FormattedString {
     return str
   }
 
-  // splits this every {chars} characters with optional
-  // frontPadding (indent in the first line)
-  split (chars, frontPadding) {
-    let pos = +frontPadding || 0
-    let lines = []
-    let line
+  get lastStyle () {
+    return this.parts[this.parts.length - 1][1]
+  }
+
+  slice (start, end) {
+    let pos = 0
+    let slicePart = null
+    let sliceParts = []
+    if (start === undefined) start = 0
+    if (end === undefined) end = Infinity
+
     for (let part of this.parts) {
-      if (line && line[1] !== part[1]) {
-        line.push(['', part[1]])
-      } else {
-        line = [['', part[1]]]
-      }
-      for (let char of part[0]) {
-        if (pos < chars) {
-          line[line.length - 1][0] += char
-        } else {
-          pos = 0
-          lines.push(line)
-          line = [[char, part[1]]]
+      for (let character of part[0]) {
+        if (pos < start) {
+          pos++
+          continue
         }
+        if (pos >= end) break
+
+        if (!slicePart || part[1] !== slicePart[1]) {
+          sliceParts.push(slicePart = ['', part[1]])
+        }
+        slicePart[0] += character
         pos++
       }
     }
-    if (line && line[0]) lines.push(line)
-    for (let i in lines) {
-      lines[i] = new io.FormattedString(...lines[i])
-    }
-    return lines
+
+    if (!sliceParts.length) sliceParts.push('')
+    return new io.FormattedString(...sliceParts)
+  }
+
+  concat (other) {
+    return new io.FormattedString(...this.parts.concat(other.parts))
   }
 
   // this overwrites this FormattedString at a given index with another one
   // if append is true it allows for overflow behind
-  overwrite(index, fstring, append) {
+  overwrite (index, fstring, append) {
     let pos = index
     // space is a variable used later on
     let space = true
@@ -235,6 +240,33 @@ io.Terminal = class Terminal extends EventEmitter {
     let len = this.width - this.cursorPos[0]
     line.overwrite(this.cursorPos[0],
       new io.FormattedString(' '.repeat(len), 7))
+  }
+  insertBlank (n) {
+    let line = this.lines[this.cursorPos[1]]
+    let before = line.slice(0, this.cursorPos[0])
+    let blanks = new io.FormattedString([' '.repeat(n), before.lastStyle])
+    let after = line.slice(this.cursorPos[0])
+    this.lines[this.cursorPos[1]] = before.concat(blanks).concat(after)
+    this.draw()
+  }
+  deleteForward (n) {
+    let line = this.lines[this.cursorPos[1]]
+    let before = line.slice(0, this.cursorPos[0])
+    let after = line.slice(this.cursorPos[0] + n)
+    this.lines[this.cursorPos[1]] = before.concat(after)
+    this.draw()
+  }
+  insertLines (n) {
+    let lines = []
+    for (let i = 0; i < n; i++) lines.push(new io.FormattedString(''))
+    this.lines.splice(this.cursorPos[1], 0, ...lines)
+    this.lines.splice(this.height) // delete overflow
+  }
+  deleteLines (n) {
+    this.lines.splice(this.cursorPos[1], n)
+    for (let i = this.lines.length; i < this.height; i++) {
+      this.lines.push(new io.FormattedString(''))
+    }
   }
 
   write (formatted) {

@@ -22,9 +22,6 @@ let options = {
 
 let userInfo = os.userInfo()
 
-// until there's full escape code support; because fish has a lot of them
-userInfo.shell = '/bin/bash'
-
 let shell = pty.spawn(userInfo.shell, ['--login'], {
   name: 'xterm-16color',
   cols: options.width,
@@ -49,10 +46,18 @@ for (let i = 0; i < 256; i++) anser.PALETTE_COLORS.push(i)
 let ignoreNextBell = false
 let updateShell = function (data) {
   data = data.toString()
-  let slices = data.split(/(?=\x1b][^\x07]+?\x07|[\n\r\b\x07])/g)
+  console.log(JSON.stringify(data))
+  // regex lookaheads:
+  // 1. OSC sequence
+  // 2. Designate character set
+  // 3. Special characters (newline, CR, backspace, bell)
+  let slices = data.split(/(?=\x1b][^\x07]+?\x07|\x1b[()*+-./][0AB]|[\n\r\b\x07])/g)
   for (let i in slices) {
     let slice = slices[i]
     // handle special stuff
+
+    // ignore designate character set
+    if (slice.match(/^\x1b[()*+-./][0AB]/)) slice = slice.substr(3)
 
     // $ because the slice will end before the next \x07
     let oscSequence = slice.match(/^\x1b]([^\x07]+?)$/)
