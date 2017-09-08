@@ -226,6 +226,9 @@ io.Terminal = class Terminal extends EventEmitter {
     if (enabled !== this.state.alternateBuffer) {
       this.state.alternateBuffer = enabled
 
+      // clear alternate buffer
+      if (!this.state.alternateBuffer) this.clear()
+
       let altLines = this.altLines
       this.altLines = this.lines
       this.lines = altLines
