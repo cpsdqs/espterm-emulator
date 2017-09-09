@@ -61,6 +61,20 @@ let encode2B = i =>
   String.fromCharCode((i % 127) + 1) +
     String.fromCharCode(Math.floor(i / 127) + 1)
 
+// from MightyPork/espterm
+let encode3B = n => {
+  var lsb, msb, xsb
+  lsb = (n % 127)
+  n = (n - lsb) / 127
+  lsb += 1
+  msb = (n % 127)
+  n = (n - msb) / 127
+  msb += 1
+  xsb = (n + 1)
+  return String.fromCharCode(lsb) + String.fromCharCode(msb) +
+    String.fromCharCode(xsb)
+}
+
 let decode2B = (str, i) =>
   str.charCodeAt(i) - 1 + (str.charCodeAt(i + 1) - 1) * 127
 
@@ -81,7 +95,8 @@ let getUpdateString = function () {
   attributes |= 0b1000000 * +shell.options.trackMouseMovement
   attributes |= 0b10000000 * +shell.options.enableButtons
   attributes |= 0b100000000 * +shell.options.enableMenu
-  str += encode2B(attributes)
+  attributes |= shell.terminal.state.cursorStyle << 9
+  str += encode3B(attributes)
 
   // TODO: add compression
   str += shell.terminal.render()

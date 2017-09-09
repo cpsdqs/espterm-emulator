@@ -74,7 +74,6 @@ class Anser {
     //
     // The second group matches all of the number+semicolon command sequences
     // before the "m" (or other trailing) character.
-    // These are the graphics or SGR commands.
     //
     // The last group is the text (including newlines) that is colored by
     // the other group"s commands.
@@ -228,6 +227,12 @@ class Anser {
     result.action = terminal => {
       let num = nums.length ? (nums[0] | 0) : 1
       terminal.deleteLines(num)
+    }
+  } else if (type === ' q') {
+    // cursor style
+    result.action = terminal => {
+      let num = nums.length ? (nums[0] | 0) : 1
+      terminal.state.cursorStyle = num
     }
   } else if (type === 'h' || type === 'l') {
     if (matches[1] === '?') {

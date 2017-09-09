@@ -217,6 +217,7 @@ io.Terminal = class Terminal extends EventEmitter {
     this.cursorPos = [0, 0]
     this.state = {
       cursorVisible: true,
+      cursorStyle: 1,
       alternateBuffer: false,
       savedCursorPos: null
     }
