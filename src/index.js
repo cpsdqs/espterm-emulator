@@ -9,7 +9,12 @@ const shell = require('./shell')
 const variables = require('./variables')
 
 // path to the ESPTerm repository's html folder
-const base = path.join(__dirname, '../ESPTerm/html')
+if (!process.argv[2]) {
+  console.error('Must pass ESPTerm html folder location as argument')
+  process.exit(-1)
+}
+const base = path.resolve(process.argv[2])
+console.log(`Using ${base}`)
 
 const app = express()
 
