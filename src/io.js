@@ -1,6 +1,10 @@
 const EventEmitter = require('events')
 let io = module.exports = {}
 
+let encode2B = i =>
+  String.fromCharCode((i % 127) + 1) +
+    String.fromCharCode(Math.floor(i / 127) + 1)
+
 // from MightyPork/espterm
 let encode3B = n => {
   var lsb, msb, xsb
@@ -47,14 +51,14 @@ io.FormattedString = class FormattedString {
     for (let item of this.parts) this.length += item[0].length
   }
   setStyle (part, style) {
-    this.parts[part][1] = style & 0xFFFF
+    this.parts[part][1] = style & 0xFFFFFF
   }
   setContent (part, content) {
     this.parts[part][0] = '' + content
     this.updateLength()
   }
   addPart (content, style) {
-    this.parts.push(['' + content, +style & 0xFFFF])
+    this.parts.push(['' + content, +style & 0xFFFFFF])
     this.length += content.length
   }
   partIndexOf (index) {
@@ -367,8 +371,11 @@ io.Terminal = class Terminal extends EventEmitter {
 
   render () {
     let styleToString = style => {
-      let encoded = encode3B(style)
-      return '\x01' + encoded
+      let fg = style & 0xFF
+      let bg = style >> 8 & 0xFF
+      let attrs = style >> 16 & 0xFF
+      let col = encode3B(fg + (bg << 8))
+      return '\x03' + col + '\x04' + encode2B(attrs)
     }
 
     return this.lines.map(line => {

@@ -23,7 +23,7 @@ let options = {
 let userInfo = os.userInfo()
 
 let shell = pty.spawn(userInfo.shell, ['--login'], {
-  name: 'xterm-16color',
+  name: 'xterm-256color',
   cols: options.width,
   rows: options.height,
   cwd: userInfo.homedir,
@@ -96,15 +96,14 @@ let updateShell = function (data) {
       if (part.fg === null) part.fg = 7
       if (part.bg === null) part.bg = 0
 
-      let style = 0
-
-      if (part.decoration === 'bold') style |= 1 << 8
-      if (part.decoration === 'dim') style |= 1 << 9
-      if (part.decoration === 'italic') style |= 1 << 10
-      if (part.decoration === 'underline') style |= 1 << 11
-      if (part.decoration === 'blink') style |= 1 << 12
-      if (part.decoration === 'fraktur') style |= 1 << 13
-      if (part.decoration === 'strikethrough') style |= 1 << 14
+      let attrs = 0
+      if (part.decoration === 'bold') attrs |= 1
+      if (part.decoration === 'dim') attrs |= 1 << 1
+      if (part.decoration === 'italic') attrs |= 1 << 2
+      if (part.decoration === 'underline') attrs |= 1 << 3
+      if (part.decoration === 'blink') attrs |= 1 << 4
+      if (part.decoration === 'fraktur') attrs |= 1 << 5
+      if (part.decoration === 'strikethrough') attrs |= 1 << 6
       if (part.decoration === 'reverse') {
         let bg = part.bg
         part.bg = part.fg
@@ -112,7 +111,8 @@ let updateShell = function (data) {
       }
       if (part.action) part.action(terminal)
 
-      style |= (part.fg & 0xF) + ((part.bg & 0xF) << 4)
+      let style = (part.fg & 0xFF) + ((part.bg & 0xFF) << 8) +
+        ((attrs & 0xFF) << 16)
       terminal.write(new io.FormattedString([part.content, style]))
     }
   }
