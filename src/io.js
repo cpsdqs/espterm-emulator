@@ -113,6 +113,8 @@ class ANSIParser {
       let type = +data.shift()
       if (type === 0) {
         this.handler('window-title', data[0])
+      } else if (type === 360) {
+        this.handler('set-rainbow', !!+data[0])
       }
     } else if (sequence[0] === '(' || sequence[0] === ')') {
       // designate character set
@@ -425,6 +427,11 @@ class ScrollingTerminal extends EventEmitter {
       this.cursor.visible = false
     } else if (action === 'show-cursor') {
       this.cursor.visible = true
+    } else if (action === 'set-rainbow') {
+      if (args[0] && !this.rainbow) {
+        this.rainbow = true
+        this.rainbowTimer()
+      } else if (!args[0]) this.rainbow = false
     }
   }
   write (text) {
