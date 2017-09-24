@@ -82,25 +82,25 @@ let getUpdateString = function () {
   let str = 'S'
   str += String.fromCodePoint(shell.options.height + 1)
   str += String.fromCodePoint(shell.options.width + 1)
-  str += String.fromCodePoint(shell.terminal.cursorPos[1] + 1)
-  str += String.fromCodePoint(shell.terminal.cursorPos[0] + 1)
+  str += String.fromCodePoint(shell.terminal.cursor.y + 1)
+  str += String.fromCodePoint(shell.terminal.cursor.x + 1)
   let attributes = 0
-  attributes |= 0b1 * +shell.terminal.state.cursorVisible
+  attributes |= 0b1 * +shell.terminal.cursor.visible
   attributes |= 0b10 * +shell.options.cursorHanging
   attributes |= 0b100 * +shell.options.cursorKeysAppMode
   attributes |= 0b1000 * +shell.options.numpadKeysAppMode
   attributes |= 0b10000 * +shell.options.functionKeysMode
   attributes |= 0b100000 * +(shell.options.trackMouseClicks ||
-    shell.terminal.state.alternateBuffer)
+    shell.terminal.alternateBufferEnabled)
   attributes |= 0b1000000 * +shell.options.trackMouseMovement
   attributes |= 0b10000000 * +shell.options.enableButtons
   attributes |= 0b100000000 * +shell.options.enableMenu
-  attributes |= shell.terminal.state.cursorStyle << 9
+  attributes |= shell.terminal.cursor.style << 9
   str += String.fromCodePoint(attributes + 1)
 
   // TODO: add compression
-  str += shell.terminal.render()
-  return str
+  str += shell.terminal.serialize()
+  return shell.terminal.serialize()
 }
 
 let title = 'ESPTerm'

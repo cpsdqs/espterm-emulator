@@ -1,7 +1,6 @@
 const EventEmitter = require('events')
 const os = require('os')
 const pty = require('pty.js')
-const Anser = require('./anser')
 
 const io = require('./io')
 
@@ -10,7 +9,6 @@ let emitter = module.exports = new EventEmitter()
 let options = {
   height: 25,
   width: 80,
-  cursorHanging: false,
   cursorKeysAppMode: false,
   numpadKeysAppMode: false,
   functionKeysMode: false,
@@ -37,15 +35,15 @@ let shell = pty.spawn(userInfo.shell, ['--login'], {
   }
 })
 
-let terminal = new io.Terminal(options.width, options.height)
-
-let anser = new Anser(terminal)
-anser.PALETTE_COLORS = []
-for (let i = 0; i < 256; i++) anser.PALETTE_COLORS.push(i)
+let terminal = new io.ScrollingTerminal(options.width, options.height)
+terminal.on('bell', () => emitter.emit('bell'))
+terminal.on('window-title', title => emitter.emit('update-title', title))
 
 let ignoreNextBell = false
 let updateShell = function (data) {
-  data = data.toString()
+  terminal.write(data.toString())
+  return
+
   // regex lookaheads:
   // 1. OSC sequence
   // 2. Designate character set
