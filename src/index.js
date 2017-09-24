@@ -52,6 +52,20 @@ app.get(/^\/cfg\/\w+\/set/, (req, res) => {
   Object.assign(variables, req.query)
   res.redirect(req.path.replace('/set', ''))
 })
+app.get('/cfg/wifi/scan', (req, res) => {
+  res.send(JSON.stringify({
+    result: {
+      inProgress: 0,
+      "APs": [
+        {
+          essid: `PID: ${process.pid}`,
+          rssi_perc: 100,
+          enc: 0
+        }
+      ]
+    }
+  }))
+})
 
 app.get('/system/ping', (req, res) => {
   res.send('pong')

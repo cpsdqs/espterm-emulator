@@ -27,13 +27,19 @@ module.exports = {
   theme: 0,
   themeCount: 6,
   labels_seq: 'T<init from JS>\x01\x01\x01\x01\x01',
+  default_fg: 7,
+  default_bg: 0,
+  want_all_fn: 0,
 
   vers_fw: packageInfo.version,
   date: '— well, not built, but started ' + getISODate(),
   time: getShortISOTime(),
   vers_httpd: `(this isn't httpd. This is Node ${process.version})`,
   vers_sdk: `(this doesn't use any IoT SDK)`,
-  githubrepo: 'https://github.com/MightyPork/ESPTerm',
+  githubrepo: 'https://github.com/ESPTerm/espterm-firmware',
+  githubrepo_front: 'https://github.com/ESPTerm/espterm-front-end',
+  hash_backend: 'f7edbf19',
+  hash_frontend: '75496b8b',
 
   sta_dhcp_enable: 1,
   sta_addr_ip: 'NaN.NaN.NaN.Batman',
@@ -71,8 +77,7 @@ module.exports = {
   show_buttons: 1,
   show_config_links: 1,
   loopback: 0,
-  default_fg: 7,
-  default_bg: 0,
+  cursor_shape: 1,
 
   ap_enable: 1,
   ap_ssid: 'THIS-wontactuallydoanything',
@@ -84,5 +89,7 @@ module.exports = {
   sta_ssid: `Node ${process.version}`,
   sta_password: '',
   sta_active_ip: 'not an IP',
-  sta_active_ssid: `Node ${process.version}`
+  sta_active_ssid: `Node ${process.version}`,
+  access_name: process.env['USER'],
+  pwlock: 0
 }
