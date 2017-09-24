@@ -80,10 +80,10 @@ let decode2B = (str, i) =>
 
 let getUpdateString = function () {
   let str = 'S'
-  str += encode2B(shell.options.height)
-  str += encode2B(shell.options.width)
-  str += encode2B(shell.terminal.cursorPos[1])
-  str += encode2B(shell.terminal.cursorPos[0])
+  str += String.fromCodePoint(shell.options.height + 1)
+  str += String.fromCodePoint(shell.options.width + 1)
+  str += String.fromCodePoint(shell.terminal.cursorPos[1] + 1)
+  str += String.fromCodePoint(shell.terminal.cursorPos[0] + 1)
   let attributes = 0
   attributes |= 0b1 * +shell.terminal.state.cursorVisible
   attributes |= 0b10 * +shell.options.cursorHanging
@@ -96,7 +96,7 @@ let getUpdateString = function () {
   attributes |= 0b10000000 * +shell.options.enableButtons
   attributes |= 0b100000000 * +shell.options.enableMenu
   attributes |= shell.terminal.state.cursorStyle << 9
-  str += encode3B(attributes)
+  str += String.fromCodePoint(attributes + 1)
 
   // TODO: add compression
   str += shell.terminal.render()
@@ -126,7 +126,10 @@ const ws = new WebSocket.Server({ server: server })
 let hasConnection = false
 
 ws.on('connection', (ws, request) => {
-  if (hasConnection) return
+  if (hasConnection) {
+    ws.close()
+    return
+  }
   hasConnection = true
 
   const ip = request.connection.remoteAddress

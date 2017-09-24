@@ -373,9 +373,11 @@ io.Terminal = class Terminal extends EventEmitter {
     let styleToString = style => {
       let fg = style & 0xFF
       let bg = style >> 8 & 0xFF
-      let attrs = style >> 16 & 0xFF
-      let col = encode3B(fg + (bg << 8))
-      return '\x03' + col + '\x04' + encode2B(attrs)
+      let attrs = style >> 16 & 0xFFFF
+      attrs |= (1 << 8) * +(fg !== 7) // rudimentary default fg/bg thing
+      attrs |= (1 << 9) * +(bg !== 0)
+      let col = String.fromCodePoint(fg + (bg << 8) + 1)
+      return '\x03' + col + '\x04' + String.fromCodePoint(attrs + 1)
     }
 
     return this.lines.map(line => {
