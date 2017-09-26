@@ -118,7 +118,7 @@ impl SequenceParser {
                         .split(';')
                         .map(|x| match x.parse::<i32>() {
                             Ok(x) => x,
-                            Err(_) => 1,
+                            Err(_) => 0,
                         })
                         .collect();
 
@@ -211,13 +211,11 @@ impl SequenceParser {
                                             27 => self.stack.push(Action::RemoveAttrs(1 << 10)),
                                             // set foreground
                                             color @ 30...37 => {
-                                                self.stack
-                                                    .push(Action::SetColorFG(color as u32 % 10))
+                                                self.stack.push(Action::SetColorFG(color as u32 % 10))
                                             }
                                             // set background
                                             color @ 40...47 => {
-                                                self.stack
-                                                    .push(Action::SetColorBG(color as u32 % 10))
+                                                self.stack.push(Action::SetColorBG(color as u32 % 10))
                                             }
                                             // reset foreground
                                             39 => self.stack.push(Action::ResetColorFG),
@@ -345,6 +343,7 @@ impl SequenceParser {
                 }
             } else if self.state.sequence_type == SequenceType::ANSI && '\x40' <= character &&
                       character <= '\x7e' {
+                self.state.sequence.push(character);
                 self.apply_sequence();
             } else if self.state.sequence_type == SequenceType::ESC {
                 if character == '\\' {

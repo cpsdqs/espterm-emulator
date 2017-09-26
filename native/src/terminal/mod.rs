@@ -218,8 +218,8 @@ impl Terminal {
         if self.state.cursor.y < 0 {
             self.state.cursor.y = 0;
         }
-        if self.state.cursor.x >= self.height as i32 {
-            self.state.cursor.x = (self.height - 1) as i32;
+        if self.state.cursor.y >= self.height as i32 {
+            self.state.cursor.y = (self.height - 1) as i32;
         }
     }
 
@@ -463,15 +463,15 @@ impl Terminal {
                         data.push(std::char::from_u32((style & 0xFFFF) + 1).unwrap());
                     } else if set_fg {
                         data.push('\x05');
-                        data.push(std::char::from_u32(fg).unwrap());
+                        data.push(std::char::from_u32(fg + 1).unwrap());
                     } else if set_bg {
                         data.push('\x06');
-                        data.push(std::char::from_u32(bg).unwrap());
+                        data.push(std::char::from_u32(bg + 1).unwrap());
                     }
 
                     if set_attrs {
                         data.push('\x04');
-                        data.push(std::char::from_u32(attrs).unwrap());
+                        data.push(std::char::from_u32(attrs + 1).unwrap());
                     }
 
                     last_style = style
