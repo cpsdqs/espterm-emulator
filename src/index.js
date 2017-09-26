@@ -71,49 +71,10 @@ app.get('/system/ping', (req, res) => {
   res.send('pong')
 })
 
-let encode2B = i =>
-  String.fromCharCode((i % 127) + 1) +
-    String.fromCharCode(Math.floor(i / 127) + 1)
-
-// from MightyPork/espterm
-let encode3B = n => {
-  var lsb, msb, xsb
-  lsb = (n % 127)
-  n = (n - lsb) / 127
-  lsb += 1
-  msb = (n % 127)
-  n = (n - msb) / 127
-  msb += 1
-  xsb = (n + 1)
-  return String.fromCharCode(lsb) + String.fromCharCode(msb) +
-    String.fromCharCode(xsb)
-}
-
 let decode2B = (str, i) =>
   str.charCodeAt(i) - 1 + (str.charCodeAt(i + 1) - 1) * 127
 
 let getUpdateString = function () {
-  let str = 'S'
-  str += String.fromCodePoint(shell.options.height + 1)
-  str += String.fromCodePoint(shell.options.width + 1)
-  str += String.fromCodePoint(shell.terminal.cursor.y + 1)
-  str += String.fromCodePoint(shell.terminal.cursor.x + 1)
-  let attributes = 0
-  attributes |= 0b1 * +shell.terminal.cursor.visible
-  attributes |= 0b10 * +shell.options.cursorHanging
-  attributes |= 0b100 * +shell.options.cursorKeysAppMode
-  attributes |= 0b1000 * +shell.options.numpadKeysAppMode
-  attributes |= 0b10000 * +shell.options.functionKeysMode
-  attributes |= 0b100000 * +(shell.options.trackMouseClicks ||
-    shell.terminal.alternateBufferEnabled)
-  attributes |= 0b1000000 * +shell.options.trackMouseMovement
-  attributes |= 0b10000000 * +shell.options.enableButtons
-  attributes |= 0b100000000 * +shell.options.enableMenu
-  attributes |= shell.terminal.cursor.style << 9
-  str += String.fromCodePoint(attributes + 1)
-
-  // TODO: add compression
-  str += shell.terminal.serialize()
   return shell.terminal.serialize()
 }
 
@@ -152,11 +113,20 @@ ws.on('connection', (ws, request) => {
   ws.send(getTitleString())
   ws.send(getUpdateString())
 
-  let update = () => ws.send(getUpdateString())
+  let _lastUpdateString = null
+  let update = () => {
+    let updateString = getUpdateString()
+    if (_lastUpdateString !== updateString) {
+      ws.send(getUpdateString())
+      _lastUpdateString = updateString
+    }
+  }
   let updateTitle = () => ws.send(getTitleString())
   let emitBell = () => ws.send('B')
 
-  shell.terminal.on('update', update)
+  let updateInterval = setInterval(update, 30);
+
+  // shell.terminal.on('update', update)
   shell.on('update-title', updateTitle)
   shell.on('bell', emitBell)
 
@@ -173,26 +143,27 @@ ws.on('connection', (ws, request) => {
       shell.write(content)
     } else if (type === 'b') {
       let button = content.charCodeAt(0)
-      // what to do?
+      shell.write(String.fromCharCode(button))
     } else if (type === 'm' || type === 'p' || type === 'r') {
       let row = decode2B(content, 0)
       let column = decode2B(content, 2)
       let button = decode2B(content, 4)
       let modifiers = decode2B(content, 6)
 
-      if (shell.terminal.state.alternateBuffer && 4 <= button && button <= 5) {
+      /* if (shell.terminal.state.alternateBuffer && 4 <= button && button <= 5) {
         if (button === 4) {
           shell.write('\x1bOA')
         } else if (button === 5) {
           shell.write('\x1bOB')
         }
-      }
+      } */
     }
   })
 
   ws.on('close', () => {
     clearInterval(heartbeat)
-    shell.terminal.removeListener('update', update)
+    clearInterval(updateInterval);
+    // shell.terminal.removeListener('update', update)
     shell.removeListener('update-title', updateTitle)
     shell.removeListener('bell', emitBell)
     console.log('disconnected')
