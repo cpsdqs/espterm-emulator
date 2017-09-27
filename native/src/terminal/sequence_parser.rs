@@ -130,11 +130,11 @@ impl SequenceParser {
                     match action {
                         b'H' | b'f' => {
                             let y = match numbers.get(0) {
-                                Some(x) => *x,
+                                Some(x) => *x - 1,
                                 None => 0,
                             };
                             let x = match numbers.get(1) {
-                                Some(x) => *x,
+                                Some(x) => *x - 1,
                                 None => 0,
                             };
                             self.stack.push(Action::SetCursor(x as u32, y as u32));
