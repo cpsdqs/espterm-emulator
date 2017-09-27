@@ -3,26 +3,30 @@ pub mod sequence_parser;
 use self::sequence_parser::{Action, SequenceParser, ClearType};
 use std;
 
-struct TerminalStyle {
+#[derive(Clone, PartialEq)]
+pub struct CellStyle {
     attrs: u16,
-    fg: u8,
-    bg: u8,
+    fg: u32,
+    bg: u32,
 }
 
-impl TerminalStyle {
-    fn new() -> TerminalStyle {
-        TerminalStyle {
+// TODO: use Copy trait, maybe
+
+impl CellStyle {
+    fn new() -> CellStyle {
+        CellStyle {
             attrs: 0,
             fg: 0,
             bg: 0,
         }
     }
+
     fn reset(&mut self) {
         self.attrs = 0;
     }
 
-    fn to_bytes(&self) -> u32 {
-        ((self.attrs as u32) << 16) + ((self.bg as u32) << 8) + (self.fg as u32)
+    fn has_short_color(&self) -> bool {
+        self.fg < 256 && self.bg < 256
     }
 }
 
@@ -48,7 +52,7 @@ impl CursorState {
 #[derive(Clone)]
 struct ScreenCell {
     text: char,
-    style: u32,
+    style: CellStyle,
 }
 
 struct ScreenBuffer {
@@ -58,26 +62,26 @@ struct ScreenBuffer {
 impl ScreenBuffer {
     fn new(width: usize, height: usize) -> ScreenBuffer {
         let mut buf = ScreenBuffer { lines: Box::new([]) };
-        buf.clear(width, height, 0);
+        buf.clear(width, height, CellStyle::new());
         buf
     }
 
-    fn make_line(width: usize, style: u32) -> Box<[ScreenCell]> {
+    fn make_line(width: usize, style: CellStyle) -> Box<[ScreenCell]> {
         let mut line: Vec<ScreenCell> = Vec::new();
         for _ in 0..width {
             line.push(ScreenCell {
                 text: ' ',
-                style: style,
+                style: style.clone(),
             })
         }
         line.into_boxed_slice()
     }
 
-    fn clear(&mut self, width: usize, height: usize, style: u32) {
+    fn clear(&mut self, width: usize, height: usize, style: CellStyle) {
         let mut lines: Vec<Box<[ScreenCell]>> = Vec::new();
 
         for _ in 0..height {
-            lines.push(ScreenBuffer::make_line(width, style))
+            lines.push(ScreenBuffer::make_line(width, style.clone()))
         }
 
         self.lines = lines.into_boxed_slice();
@@ -94,7 +98,7 @@ impl ScreenBuffer {
 }
 
 struct TerminalState {
-    style: TerminalStyle,
+    style: CellStyle,
     cursor: CursorState,
     saved_cursor: CursorState,
     track_mouse: bool,
@@ -102,6 +106,8 @@ struct TerminalState {
     is_alt_buffer: bool,
     alt_buffer: ScreenBuffer,
     buffer: ScreenBuffer,
+    scroll_margin_top: u32,
+    scroll_margin_bottom: u32,
     state_id: u32,
     title: String,
     bell_id: u32
@@ -110,7 +116,7 @@ struct TerminalState {
 impl TerminalState {
     fn new(width: usize, height: usize) -> TerminalState {
         TerminalState {
-            style: TerminalStyle::new(),
+            style: CellStyle::new(),
             cursor: CursorState::new(),
             saved_cursor: CursorState::new(),
             track_mouse: false,
@@ -118,6 +124,8 @@ impl TerminalState {
             is_alt_buffer: false,
             alt_buffer: ScreenBuffer::new(width, height),
             buffer: ScreenBuffer::new(width, height),
+            scroll_margin_top: 0,
+            scroll_margin_bottom: height as u32,
             state_id: 0,
             title: String::new(),
             bell_id: 0
@@ -130,6 +138,33 @@ fn get_rainbow_color(t: f64) -> u8 {
     let g = ((t + 2.0 / 3.0 * std::f64::consts::PI).sin() * 2.5 + 2.5).floor() as u8;
     let b = ((t + 4.0 / 3.0 * std::f64::consts::PI).sin() * 2.5 + 2.5).floor() as u8;
     16 + 36 * r + 6 * g + b
+}
+
+fn encode_as_code_point(n: u32) -> char {
+    // this is unsafe but I don't think C (i.e. ESPTerm) cares either
+    unsafe {
+        std::char::from_u32_unchecked(n + 1)
+    }
+}
+
+fn full_value_to_256(value: u32) -> u32 {
+    if value < 55 {
+        0
+    } else {
+        1 + (value - 55) / 40
+    }
+}
+
+fn ensure_color_256(color: u32) -> u32 {
+    if color < 256 {
+        color
+    } else {
+        let color = color - 256;
+        let b = full_value_to_256(color & 0xFF);
+        let g = full_value_to_256((color >> 8) & 0xFF);
+        let r = full_value_to_256((color >> 16) & 0xFF);
+        16 + 36 * r + 6 * g + b
+    }
 }
 
 pub struct Terminal {
@@ -164,23 +199,21 @@ impl Terminal {
     }
 
     pub fn clear_screen(&mut self) {
-        self.state.buffer.clear(self.width as usize,
-                                self.height as usize,
-                                self.state.style.to_bytes());
+        self.state.buffer.clear(self.width as usize, self.height as usize, self.state.style.clone());
     }
 
-    pub fn clear_line(&mut self, ln: u32, style: u32) {
+    pub fn clear_line(&mut self, ln: u32, style: CellStyle) {
         if ln >= self.height {
             return;
         }
         let line = &mut self.state.buffer.lines[ln as usize];
         for x in 0..self.width {
             line[x as usize].text = ' ';
-            line[x as usize].style = style;
+            line[x as usize].style = style.clone();
         }
     }
 
-    pub fn clear_line_before(&mut self, ln: u32, col: u32, style: u32) {
+    pub fn clear_line_before(&mut self, ln: u32, col: u32, style: CellStyle) {
         if ln >= self.height {
             return;
         }
@@ -190,26 +223,26 @@ impl Terminal {
                 break;
             }
             line[x as usize].text = ' ';
-            line[x as usize].style = style;
+            line[x as usize].style = style.clone();
         }
     }
 
-    pub fn clear_line_after(&mut self, ln: u32, col: u32, style: u32) {
+    pub fn clear_line_after(&mut self, ln: u32, col: u32, style: CellStyle) {
         if ln >= self.height || col >= self.width {
             return;
         }
         let line = &mut self.state.buffer.lines[ln as usize];
         for x in col..self.width {
             line[x as usize].text = ' ';
-            line[x as usize].style = style;
+            line[x as usize].style = style.clone();
         }
     }
 
     fn copy_line_from_adjacent(&mut self, y: u32, dy: i32) {
         let target = (y as i32) + dy;
         let line;
-        if target < 0 || target as u32 >= self.height {
-            line = ScreenBuffer::make_line(self.width as usize, self.state.style.to_bytes());
+        if target < 0 || target as u32 >= self.state.scroll_margin_bottom {
+            line = ScreenBuffer::make_line(self.width as usize, self.state.style.clone());
         } else {
             line = self.state.buffer.clone_line(target as usize);
         }
@@ -218,11 +251,11 @@ impl Terminal {
 
     pub fn scroll(&mut self, amount: i32, with_cursor: bool) {
         if amount >= 0 {
-            for y in 0..self.height {
+            for y in self.state.scroll_margin_top..self.state.scroll_margin_bottom {
                 self.copy_line_from_adjacent(y, amount);
             }
         } else {
-            for y in (0..self.height).rev() {
+            for y in (self.state.scroll_margin_top..self.state.scroll_margin_bottom).rev() {
                 self.copy_line_from_adjacent(y, amount);
             }
         }
@@ -242,14 +275,14 @@ impl Terminal {
         if self.state.cursor.y < 0 {
             self.state.cursor.y = 0;
         }
-        if self.state.cursor.y >= self.height as i32 {
-            self.state.cursor.y = (self.height - 1) as i32;
+        if self.state.cursor.y >= self.state.scroll_margin_bottom as i32 {
+            self.state.cursor.y = (self.state.scroll_margin_bottom - 1) as i32;
         }
     }
 
     pub fn new_line(&mut self) {
         self.state.cursor.y += 1;
-        if self.state.cursor.y >= self.height as i32 {
+        if self.state.cursor.y >= self.state.scroll_margin_bottom as i32 {
             self.scroll(1, true);
         }
     }
@@ -261,7 +294,7 @@ impl Terminal {
         }
         let mut cell = &mut self.state.buffer.lines[self.state.cursor.y as usize][self.state.cursor.x as usize];
         cell.text = character;
-        cell.style = self.state.style.to_bytes();
+        cell.style = self.state.style.clone();
         self.state.cursor.x += 1;
     }
 
@@ -287,7 +320,7 @@ impl Terminal {
             if x >= self.width {
                 line[i as usize] = ScreenCell {
                     text: ' ',
-                    style: self.state.style.to_bytes(),
+                    style: self.state.style.clone(),
                 };
             } else {
                 line[i as usize] = line[x as usize].clone();
@@ -303,7 +336,7 @@ impl Terminal {
             if x < 0 || x < end_x {
                 line[i as usize] = ScreenCell {
                     text: ' ',
-                    style: self.state.style.to_bytes(),
+                    style: self.state.style.clone(),
                 };
             } else {
                 line[i as usize] = line[x as usize].clone();
@@ -312,27 +345,27 @@ impl Terminal {
     }
 
     pub fn insert_lines(&mut self, count: u32) {
-        let end_line = if (self.state.cursor.y as u32) + count >= self.height {
-            self.height
+        let end_line = if (self.state.cursor.y as u32) + count >= self.state.scroll_margin_bottom {
+            self.state.scroll_margin_bottom
         } else {
             (self.state.cursor.y as u32) + count
         };
 
-        for y in (end_line..self.height).rev() {
+        for y in (end_line..self.state.scroll_margin_bottom).rev() {
             self.state.buffer.lines[y as usize] = self.state.buffer.lines[(y - count) as usize]
                 .clone();
         }
 
-        for y in (self.state.cursor.y as u32)..((self.state.cursor.y as u32) + count) {
+        for y in (self.state.cursor.y as u32)..end_line {
             self.state.buffer.lines[y as usize] =
-                ScreenBuffer::make_line(self.width as usize, self.state.style.to_bytes())
+                ScreenBuffer::make_line(self.width as usize, self.state.style.clone())
         }
     }
 
     pub fn delete_lines(&mut self, count: u32) {
-        for y in (self.state.cursor.y as u32)..self.height {
-            if y + count >= self.height {
-                self.state.buffer.lines[y as usize] = ScreenBuffer::make_line(self.width as usize, self.state.style.to_bytes());
+        for y in (self.state.cursor.y as u32)..self.state.scroll_margin_bottom {
+            if y + count >= self.state.scroll_margin_bottom {
+                self.state.buffer.lines[y as usize] = ScreenBuffer::make_line(self.width as usize, self.state.style.clone());
             } else {
                 self.state.buffer.lines[y as usize] = self.state.buffer.lines[(y + count) as usize].clone();
             }
@@ -365,26 +398,26 @@ impl Terminal {
             ClearScreen(clear_type) => {
                 let cursor_x = self.state.cursor.x as u32;
                 let cursor_y = self.state.cursor.y as u32;
-                let current_style = self.state.style.to_bytes();
+                let current_style = self.state.style.clone();
 
                 if clear_type == ClearType::All {
                     self.clear_screen();
                 } else if clear_type == ClearType::Before {
-                    self.clear_line_before(cursor_y, cursor_x, current_style);
+                    self.clear_line_before(cursor_y, cursor_x, current_style.clone());
                     for y in 0..(self.state.cursor.y as u32) {
-                        self.clear_line(y, current_style);
+                        self.clear_line(y, current_style.clone());
                     }
                 } else if clear_type == ClearType::After {
-                    self.clear_line_after(cursor_y, cursor_x, current_style);
+                    self.clear_line_after(cursor_y, cursor_x, current_style.clone());
                     for y in ((self.state.cursor.y + 1) as u32)..self.height {
-                        self.clear_line(y, current_style);
+                        self.clear_line(y, current_style.clone());
                     }
                 }
             }
             ClearLine(clear_type) => {
                 let cursor_x = self.state.cursor.x as u32;
                 let cursor_y = self.state.cursor.y as u32;
-                let current_style = self.state.style.to_bytes();
+                let current_style = self.state.style.clone();
 
                 if clear_type == ClearType::All {
                     self.clear_line(cursor_y, current_style);
@@ -406,15 +439,23 @@ impl Terminal {
             }
             SetCursorVisible(visible) => self.state.cursor.visible = visible,
             SetAltBuffer(enabled) => self.set_alt_buffer(enabled),
+            SetScrollMargin(top, bottom) => {
+                self.state.scroll_margin_top = top;
+                self.state.scroll_margin_bottom = if bottom == 0 || bottom > self.height {
+                    self.height
+                } else {
+                    bottom + 1
+                }
+            },
             ResetStyle => self.state.style.reset(),
             AddAttrs(attrs) => self.state.style.attrs |= attrs,
             RemoveAttrs(attrs) => self.state.style.attrs &= !attrs,
             SetColorFG(color) => {
-                self.state.style.fg = color as u8;
+                self.state.style.fg = color;
                 self.state.style.attrs |= 1 << 8; // set has_fg
             }
             SetColorBG(color) => {
-                self.state.style.bg = color as u8;
+                self.state.style.bg = color;
                 self.state.style.attrs |= 1 << 9; // set has_bg
             }
             ResetColorFG => self.state.style.attrs &= !(1 << 8),
@@ -464,10 +505,10 @@ impl Terminal {
 
     pub fn serialize(&self, time: f64) -> String {
         let mut data = String::from("S");
-        data.push(std::char::from_u32(self.height + 1).unwrap());
-        data.push(std::char::from_u32(self.width + 1).unwrap());
-        data.push(std::char::from_u32((self.state.cursor.y as u32) + 1).unwrap());
-        data.push(std::char::from_u32((self.state.cursor.x as u32) + 1).unwrap());
+        data.push(encode_as_code_point(self.height));
+        data.push(encode_as_code_point(self.width));
+        data.push(encode_as_code_point(self.state.cursor.y as u32));
+        data.push(encode_as_code_point(self.state.cursor.x as u32));
 
         let mut attributes = if self.state.cursor.visible {
             1u32
@@ -479,41 +520,49 @@ impl Terminal {
         }
         attributes |= 3 << 7;
         attributes |= (self.state.cursor.style as u32) << 9;
-        data.push(std::char::from_u32(attributes + 1).unwrap());
+        data.push(encode_as_code_point(attributes));
 
-        let mut last_style = 0;
+        let mut last_style = CellStyle::new();
 
         for y in 0..self.height {
             for x in 0..self.width {
                 let cell = &self.state.buffer.lines[y as usize][x as usize];
                 let style = if self.state.rainbow {
-                    (cell.style & 0xFCFF0000) | (1 << 8 << 16) | get_rainbow_color(((x + y) as f64) / 10.0 + time) as u32
+                    CellStyle {
+                        fg: get_rainbow_color(((x + y) as f64) / 10.0 + time) as u32,
+                        bg: 0,
+                        ..cell.style
+                    }
                 } else {
-                    cell.style
+                    cell.style.clone()
                 };
 
                 if style != last_style {
-                    let fg = style & 0xFF;
-                    let bg = (style >> 8) & 0xFF;
-                    let attrs = (style >> 16) & 0xFFFF;
-                    let set_fg = fg != (last_style & 0xFF);
-                    let set_bg = bg != ((last_style >> 8) & 0xFF);
-                    let set_attrs = attrs != ((last_style >> 16) & 0xFFFF);
+                    let set_fg = style.fg != last_style.fg;
+                    let set_bg = style.bg != last_style.bg;
+                    let set_attrs = style.attrs != last_style.attrs;
 
                     if set_fg && set_bg {
-                        data.push('\x03');
-                        data.push(std::char::from_u32((style & 0xFFFF) + 1).unwrap());
+                        if style.has_short_color() {
+                            data.push('\x03');
+                            data.push(encode_as_code_point((style.bg << 8) + style.fg));
+                        } else {
+                            data.push('\x05');
+                            data.push(encode_as_code_point(ensure_color_256(style.fg)));
+                            data.push('\x06');
+                            data.push(encode_as_code_point(ensure_color_256(style.bg)));
+                        }
                     } else if set_fg {
                         data.push('\x05');
-                        data.push(std::char::from_u32(fg + 1).unwrap());
+                        data.push(encode_as_code_point(ensure_color_256(style.fg)));
                     } else if set_bg {
                         data.push('\x06');
-                        data.push(std::char::from_u32(bg + 1).unwrap());
+                        data.push(encode_as_code_point(ensure_color_256(style.bg)));
                     }
 
                     if set_attrs {
                         data.push('\x04');
-                        data.push(std::char::from_u32(attrs + 1).unwrap());
+                        data.push(encode_as_code_point(style.attrs as u32));
                     }
 
                     last_style = style

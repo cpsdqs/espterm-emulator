@@ -49,6 +49,7 @@ pub enum Action {
     RestoreCursor,
     SetCursorVisible(bool),
     SetAltBuffer(bool),
+    SetScrollMargin(u32, u32),
     ResetStyle,
     AddAttrs(u16),
     RemoveAttrs(u16),
@@ -180,6 +181,17 @@ impl SequenceParser {
                         b'T' => self.stack.push(Action::Scroll(-1)),
                         b'@' => self.stack.push(Action::InsertBlanks(num_or_one as u32)),
                         b'q' => self.stack.push(Action::SetCursorStyle(num_or_one as u8)),
+                        b'r' => {
+                            let top = match numbers.get(0) {
+                                Some(x) => *x - 1,
+                                None => 0,
+                            };
+                            let bottom = match numbers.get(1) {
+                                Some(x) => *x - 1,
+                                None => 0,
+                            };
+                            self.stack.push(Action::SetScrollMargin(top as u32, bottom as u32));
+                        },
                         b's' => self.stack.push(Action::SaveCursor),
                         b'u' => self.stack.push(Action::RestoreCursor),
                         b'm' => {
