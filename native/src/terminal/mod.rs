@@ -125,6 +125,13 @@ impl TerminalState {
     }
 }
 
+fn get_rainbow_color(t: f64) -> u8 {
+    let r = (t.sin() * 2.5 + 2.5).floor() as u8;
+    let g = ((t + 2.0 / 3.0 * std::f64::consts::PI).sin() * 2.5 + 2.5).floor() as u8;
+    let b = ((t + 4.0 / 3.0 * std::f64::consts::PI).sin() * 2.5 + 2.5).floor() as u8;
+    16 + 36 * r + 6 * g + b
+}
+
 pub struct Terminal {
     pub width: u32,
     pub height: u32,
@@ -252,8 +259,7 @@ impl Terminal {
             self.state.cursor.x = 0;
             self.new_line();
         }
-        let mut cell = &mut self.state.buffer.lines[self.state.cursor.y as usize][self.state.cursor.x as
-                            usize];
+        let mut cell = &mut self.state.buffer.lines[self.state.cursor.y as usize][self.state.cursor.x as usize];
         cell.text = character;
         cell.style = self.state.style.to_bytes();
         self.state.cursor.x += 1;
@@ -270,6 +276,7 @@ impl Terminal {
                 self.state.cursor.x -= 1;
             }
         }
+        self.clamp_cursor();
     }
 
     pub fn delete_forward(&mut self, count: u32) {
@@ -434,7 +441,11 @@ impl Terminal {
         self.state.state_id += 1;
     }
 
-    pub fn get_state_id(&self) -> u32 {
+    pub fn get_state_id(&mut self) -> u32 {
+        // hackity hack
+        if self.state.rainbow {
+            self.state.state_id += 1
+        }
         self.state.state_id
     }
 
@@ -451,7 +462,7 @@ impl Terminal {
         self.update_screen();
     }
 
-    pub fn serialize(&self) -> String {
+    pub fn serialize(&self, time: f64) -> String {
         let mut data = String::from("S");
         data.push(std::char::from_u32(self.height + 1).unwrap());
         data.push(std::char::from_u32(self.width + 1).unwrap());
@@ -475,7 +486,12 @@ impl Terminal {
         for y in 0..self.height {
             for x in 0..self.width {
                 let cell = &self.state.buffer.lines[y as usize][x as usize];
-                let style = cell.style;
+                let style = if self.state.rainbow {
+                    (cell.style & 0xFCFF0000) | (1 << 8 << 16) | get_rainbow_color(((x + y) as f64) / 10.0 + time) as u32
+                } else {
+                    cell.style
+                };
+
                 if style != last_style {
                     let fg = style & 0xFF;
                     let bg = (style >> 8) & 0xFF;

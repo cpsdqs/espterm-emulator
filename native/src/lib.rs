@@ -35,8 +35,9 @@ declare_types! {
     method serialize(call) {
       let scope = call.scope;
 
+      let time = call.arguments.require(scope, 0)?.check::<JsNumber>()?.value();
       let serialized = call.arguments.this(scope).grab(|terminal| {
-        terminal.serialize().clone()
+        terminal.serialize(time).clone()
       });
       Ok(JsString::new_or_throw(scope, &serialized[..])?.upcast())
     }

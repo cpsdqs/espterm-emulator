@@ -77,8 +77,9 @@ let decode2B = (str, i) =>
 let getStateID = () => shell.terminal.getStateID()
 let getTitle = () => shell.terminal.getTitle()
 let getBellID = () => shell.terminal.getBellID()
+
 let getUpdateString = function () {
-  return shell.terminal.serialize()
+  return shell.terminal.serialize(Date.now() / 1000)
 }
 
 let getTitleStringFor = function (title) {

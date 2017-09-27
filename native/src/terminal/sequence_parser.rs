@@ -101,7 +101,12 @@ impl SequenceParser {
         {
             let sequence = &self.state.sequence;
             let bytes = sequence.as_bytes();
-            let first_char = bytes[0];
+            let first_char = if bytes.len() == 0 {
+                0
+            } else {
+                bytes[0]
+            };
+
             match first_char {
                 b'[' => {
                     // ANSI
