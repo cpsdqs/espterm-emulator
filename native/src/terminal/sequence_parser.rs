@@ -114,14 +114,20 @@ impl SequenceParser {
                         String::new()
                     };
 
-                    let numbers: Vec<i32> = content.trim()
-                        .split(';')
-                        .map(|x| match x.parse::<i32>() {
-                            Ok(x) => x,
-                            Err(_) => 0,
-                        })
-                        .collect();
+                    let numbers: Vec<i32> = if content.trim().len() == 0 {
+                        Vec::new()
+                    } else {
+                        content.trim().split(';')
+                            .map(|x| match x.parse::<i32>() {
+                                Ok(x) => x,
+                                Err(_) => 0,
+                            }).collect()
+                    };
 
+                    let num_or_zero = match numbers.get(0) {
+                        Some(x) => *x,
+                        None => 0,
+                    };
                     let num_or_one = match numbers.get(0) {
                         Some(x) => *x,
                         None => 1,
@@ -147,7 +153,7 @@ impl SequenceParser {
                         b'F' => self.stack.push(Action::MoveCursorLine(-num_or_one)),
                         b'G' => self.stack.push(Action::SetCursorX((num_or_one as u32) - 1)),
                         b'J' => {
-                            let clear_type = match num_or_one {
+                            let clear_type = match num_or_zero {
                                 1 => ClearType::Before,
                                 2 => ClearType::All,
                                 _ => ClearType::After,
@@ -155,7 +161,7 @@ impl SequenceParser {
                             self.stack.push(Action::ClearScreen(clear_type));
                         }
                         b'K' => {
-                            let clear_type = match num_or_one {
+                            let clear_type = match num_or_zero {
                                 1 => ClearType::Before,
                                 2 => ClearType::All,
                                 _ => ClearType::After,

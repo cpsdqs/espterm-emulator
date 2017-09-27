@@ -54,6 +54,27 @@ declare_types! {
       let height = call.arguments.this(scope).grab(|terminal| terminal.height.clone());
       Ok(JsNumber::new(scope, height as f64).upcast())
     }
+
+    method getStateID(call) {
+      let scope = call.scope;
+
+      let state_id = call.arguments.this(scope).grab(|terminal| terminal.get_state_id().clone());
+      Ok(JsNumber::new(scope, state_id as f64).upcast())
+    }
+
+    method getTitle(call) {
+      let scope = call.scope;
+
+      let title = call.arguments.this(scope).grab(|terminal| terminal.get_title().clone());
+      Ok(JsString::new_or_throw(scope, &title)?.upcast())
+    }
+
+    method getBellID(call) {
+      let scope = call.scope;
+
+      let bell_id = call.arguments.this(scope).grab(|terminal| terminal.get_bell_id().clone());
+      Ok(JsNumber::new(scope, bell_id as f64).upcast())
+    }
   }
 }
 

@@ -102,6 +102,9 @@ struct TerminalState {
     is_alt_buffer: bool,
     alt_buffer: ScreenBuffer,
     buffer: ScreenBuffer,
+    state_id: u32,
+    title: String,
+    bell_id: u32
 }
 
 impl TerminalState {
@@ -115,6 +118,9 @@ impl TerminalState {
             is_alt_buffer: false,
             alt_buffer: ScreenBuffer::new(width, height),
             buffer: ScreenBuffer::new(width, height),
+            state_id: 0,
+            title: String::new(),
+            bell_id: 0
         }
     }
 }
@@ -192,18 +198,29 @@ impl Terminal {
         }
     }
 
+    fn copy_line_from_adjacent(&mut self, y: u32, dy: i32) {
+        let target = (y as i32) + dy;
+        let line;
+        if target < 0 || target as u32 >= self.height {
+            line = ScreenBuffer::make_line(self.width as usize, self.state.style.to_bytes());
+        } else {
+            line = self.state.buffer.clone_line(target as usize);
+        }
+        self.state.buffer.lines[y as usize] = line;
+    }
+
     pub fn scroll(&mut self, amount: i32, with_cursor: bool) {
-        for y in 0..self.height {
-            if (y as i32) + amount < 0 || ((y as i32) + amount) as u32 >= self.height {
-                let line = ScreenBuffer::make_line(self.width as usize, 0);
-                self.state.buffer.lines[y as usize] = line;
-            } else {
-                self.state.buffer.lines[y as usize] =
-                    self.state.buffer.clone_line(((y as i32) + amount) as usize);
+        if amount >= 0 {
+            for y in 0..self.height {
+                self.copy_line_from_adjacent(y, amount);
+            }
+        } else {
+            for y in (0..self.height).rev() {
+                self.copy_line_from_adjacent(y, amount);
             }
         }
         if with_cursor {
-            self.state.cursor.y += amount;
+            self.state.cursor.y -= amount;
             self.clamp_cursor();
         }
     }
@@ -258,27 +275,32 @@ impl Terminal {
     pub fn delete_forward(&mut self, count: u32) {
         let count = std::cmp::min(count, self.width - (self.state.cursor.x as u32));
         let mut line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
-        for i in 0..count {
-            let x = self.state.cursor.x + i as i32;
-            if x + 1 <= self.width as i32 {
-                line[x as usize] = ScreenCell {
+        for i in (self.state.cursor.x as u32)..self.width {
+            let x = i + count;
+            if x >= self.width {
+                line[i as usize] = ScreenCell {
                     text: ' ',
-                    style: 0,
+                    style: self.state.style.to_bytes(),
                 };
             } else {
-                line[x as usize] = line[(x as usize) + 1].clone();
+                line[i as usize] = line[x as usize].clone();
             }
         }
     }
 
     pub fn insert_blanks(&mut self, count: u32) {
         let mut line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
-        for i in 0..count {
-            let x = self.state.cursor.x + i as i32;
-            line[x as usize] = ScreenCell {
-                text: ' ',
-                style: self.state.style.to_bytes(),
-            };
+        let end_x = self.state.cursor.x + (count as i32) - 1;
+        for i in (self.state.cursor.x..(self.width as i32)).rev() {
+            let x = i - (count as i32);
+            if x < 0 || x < end_x {
+                line[i as usize] = ScreenCell {
+                    text: ' ',
+                    style: self.state.style.to_bytes(),
+                };
+            } else {
+                line[i as usize] = line[x as usize].clone();
+            }
         }
     }
 
@@ -303,11 +325,9 @@ impl Terminal {
     pub fn delete_lines(&mut self, count: u32) {
         for y in (self.state.cursor.y as u32)..self.height {
             if y + count >= self.height {
-                self.state.buffer.lines[y as usize] = ScreenBuffer::make_line(self.width as usize,
-                                                                              0);
+                self.state.buffer.lines[y as usize] = ScreenBuffer::make_line(self.width as usize, self.state.style.to_bytes());
             } else {
-                self.state.buffer.lines[y as usize] = self.state.buffer.lines[(y + count) as usize]
-                    .clone();
+                self.state.buffer.lines[y as usize] = self.state.buffer.lines[(y + count) as usize].clone();
             }
         }
     }
@@ -392,15 +412,9 @@ impl Terminal {
             }
             ResetColorFG => self.state.style.attrs &= !(1 << 8),
             ResetColorBG => self.state.style.attrs &= !(1 << 9),
-            SetWindowTitle(title) => {
-                // TODO
-                println!("Set title: {}", title);
-            }
+            SetWindowTitle(title) => self.state.title = title,
             SetRainbowMode(enabled) => self.state.rainbow = enabled,
-            Bell => {
-                // TODO
-                println!("bell");
-            }
+            Bell => self.state.bell_id += 1,
             Backspace => self.move_back(1),
             NewLine => self.new_line(),
             Return => self.state.cursor.x = 0,
@@ -417,7 +431,19 @@ impl Terminal {
         for action in self.parser.pop_stack() {
             self.handle_action(action);
         }
-        self.parser.stack = Vec::new();
+        self.state.state_id += 1;
+    }
+
+    pub fn get_state_id(&self) -> u32 {
+        self.state.state_id
+    }
+
+    pub fn get_title(&self) -> String {
+        self.state.title.clone()
+    }
+
+    pub fn get_bell_id(&self) -> u32 {
+        self.state.bell_id
     }
 
     pub fn write(&mut self, text: String) {

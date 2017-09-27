@@ -78,6 +78,7 @@ module.exports = {
   show_config_links: 1,
   loopback: 0,
   cursor_shape: 1,
+  crlf_mode: 0,
 
   ap_enable: 1,
   ap_ssid: 'THIS-wontactuallydoanything',
@@ -91,5 +92,8 @@ module.exports = {
   sta_active_ip: 'not an IP',
   sta_active_ssid: `Node ${process.version}`,
   access_name: process.env['USER'],
-  pwlock: 0
+  pwlock: 0,
+  overclock: 1,
+  def_access_pw: 'rainbows',
+  def_admin_pw: 'rainbows'
 }

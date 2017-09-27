@@ -74,14 +74,14 @@ app.get('/system/ping', (req, res) => {
 let decode2B = (str, i) =>
   str.charCodeAt(i) - 1 + (str.charCodeAt(i + 1) - 1) * 127
 
+let getStateID = () => shell.terminal.getStateID()
+let getTitle = () => shell.terminal.getTitle()
+let getBellID = () => shell.terminal.getBellID()
 let getUpdateString = function () {
   return shell.terminal.serialize()
 }
 
-let title = 'ESPTerm'
-shell.on('update-title', newTitle => { title = newTitle })
-
-let getTitleString = function () {
+let getTitleStringFor = function (title) {
   let buttons = []
   for (let i = 1; i <= 5; i++) buttons.push(variables[`btn${i}`])
   return `T${title}` + buttons.map(name => '\x01' + name).join('')
@@ -98,7 +98,7 @@ let port = 3000
 if (Number.isFinite(+process.argv[3])) port = process.argv[3] | 0
 server.listen(port, () => console.log(`Listening on :${port}`))
 
-const ws = new WebSocket.Server({ server: server })
+const ws = new WebSocket.Server({ server })
 
 let connections = 0
 
@@ -109,31 +109,42 @@ ws.on('connection', (ws, request) => {
   }
   connections++
 
+  let trySend = data => {
+    if (ws.readyState === 1) ws.send(data)
+  }
+
   const ip = request.connection.remoteAddress
-  console.log(`connected from ${ip} (${connections} connections)`)
+  console.log(`connected from ${ip} (${connections} connection${connections === 1 ? '' : 's'})`)
 
-  ws.send(getTitleString())
-  ws.send(getUpdateString())
+  let updateTitle = title => trySend(getTitleStringFor(title))
+  let emitBell = () => trySend('B')
 
-  let _lastUpdateString = null
+  let lastStateID = null
+  let lastBellID = getBellID()
+  let lastTitle = null
+
   let update = () => {
-    let updateString = getUpdateString()
-    if (_lastUpdateString !== updateString) {
-      ws.send(getUpdateString())
-      _lastUpdateString = updateString
+    let stateID = getStateID()
+    if (stateID !== lastStateID) {
+      trySend(getUpdateString())
+      lastStateID = stateID
+    }
+    let bellID = getBellID()
+    if (bellID !== lastBellID) {
+      emitBell()
+      lastBellID = bellID
+    }
+    let title = getTitle()
+    if (lastTitle !== title) {
+      updateTitle(title)
+      lastTitle = title
     }
   }
-  let updateTitle = () => ws.send(getTitleString())
-  let emitBell = () => ws.send('B')
 
   let updateInterval = setInterval(update, 30);
 
-  // shell.terminal.on('update', update)
-  shell.on('update-title', updateTitle)
-  shell.on('bell', emitBell)
-
   let heartbeat = setInterval(() => {
-    ws.send('.')
+    trySend('.')
   }, 1000)
 
   ws.on('message', message => {
@@ -164,11 +175,8 @@ ws.on('connection', (ws, request) => {
 
   ws.on('close', () => {
     clearInterval(heartbeat)
-    clearInterval(updateInterval);
-    // shell.terminal.removeListener('update', update)
-    shell.removeListener('update-title', updateTitle)
-    shell.removeListener('bell', emitBell)
+    clearInterval(updateInterval)
     connections--
-    console.log(`disconnected (${connections} connections left)`)
+    console.log(`disconnected ${ip} (${connections} connection${connections === 1 ? '' : 's'} left)`)
   })
 })
