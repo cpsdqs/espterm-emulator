@@ -7,6 +7,8 @@ const io = require('../native')
 let emitter = module.exports = new EventEmitter()
 
 let options = {
+  width: 80,
+  height: 25,
   cursorKeysAppMode: false,
   numpadKeysAppMode: false,
   functionKeysMode: false,
@@ -15,6 +17,11 @@ let options = {
   enableButtons: true,
   enableMenu: true
 }
+
+if (Number.isFinite(+process.argv[4])) options.width = process.argv[4] | 0
+if (Number.isFinite(+process.argv[5])) options.height = process.argv[5] | 0
+
+console.log(`Size: ${options.width}x${options.height}`)
 
 let userInfo = os.userInfo()
 
@@ -33,7 +40,7 @@ let shell = pty.spawn(userInfo.shell, ['--login'], {
   }
 })
 
-let terminal = new io.Terminal()
+let terminal = new io.Terminal(options.width, options.height)
 // terminal.on('bell', () => emitter.emit('bell'))
 // terminal.on('window-title', title => emitter.emit('update-title', title))
 

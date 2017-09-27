@@ -94,21 +94,23 @@ app.get('/term/init', (req, res) => {
 app.use(express.static(base))
 
 const server = http.createServer(app)
-server.listen(3000, () => console.log('Listening on :3000'))
+let port = 3000
+if (Number.isFinite(+process.argv[3])) port = process.argv[3] | 0
+server.listen(port, () => console.log(`Listening on :${port}`))
 
 const ws = new WebSocket.Server({ server: server })
 
-let hasConnection = false
+let connections = 0
 
 ws.on('connection', (ws, request) => {
-  if (hasConnection) {
+  if (connections >= 1) {
     ws.close()
     return
   }
-  hasConnection = true
+  connections++
 
   const ip = request.connection.remoteAddress
-  console.log('connected from ' + ip)
+  console.log(`connected from ${ip} (${connections} connections)`)
 
   ws.send(getTitleString())
   ws.send(getUpdateString())
@@ -166,7 +168,7 @@ ws.on('connection', (ws, request) => {
     // shell.terminal.removeListener('update', update)
     shell.removeListener('update-title', updateTitle)
     shell.removeListener('bell', emitBell)
-    console.log('disconnected')
-    hasConnection = false
+    connections--
+    console.log(`disconnected (${connections} connections left)`)
   })
 })

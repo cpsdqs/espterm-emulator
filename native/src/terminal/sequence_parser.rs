@@ -129,11 +129,11 @@ impl SequenceParser {
 
                     match action {
                         b'H' | b'f' => {
-                            let x = match numbers.get(0) {
+                            let y = match numbers.get(0) {
                                 Some(x) => *x,
                                 None => 0,
                             };
-                            let y = match numbers.get(1) {
+                            let x = match numbers.get(1) {
                                 Some(x) => *x,
                                 None => 0,
                             };

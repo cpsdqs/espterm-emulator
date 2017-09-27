@@ -105,7 +105,7 @@ struct TerminalState {
 }
 
 impl TerminalState {
-    fn new() -> TerminalState {
+    fn new(width: usize, height: usize) -> TerminalState {
         TerminalState {
             style: TerminalStyle::new(),
             cursor: CursorState::new(),
@@ -113,8 +113,8 @@ impl TerminalState {
             track_mouse: false,
             rainbow: false,
             is_alt_buffer: false,
-            alt_buffer: ScreenBuffer::new(80, 25),
-            buffer: ScreenBuffer::new(80, 25),
+            alt_buffer: ScreenBuffer::new(width, height),
+            buffer: ScreenBuffer::new(width, height),
         }
     }
 }
@@ -127,12 +127,12 @@ pub struct Terminal {
 }
 
 impl Terminal {
-    pub fn new() -> Terminal {
+    pub fn new(width: u32, height: u32) -> Terminal {
         Terminal {
-            width: 80,
-            height: 25,
+            width,
+            height,
             parser: SequenceParser::new(),
-            state: TerminalState::new(),
+            state: TerminalState::new(width as usize, height as usize),
         }
     }
     pub fn is_cursor_hanging(&self) -> bool {

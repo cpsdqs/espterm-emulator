@@ -13,7 +13,12 @@ use terminal::Terminal;
 declare_types! {
   pub class JsTerminal for Terminal {
     init (call) {
-      Ok(Terminal::new())
+      let scope = call.scope;
+
+      let width = call.arguments.require(scope, 0)?.check::<JsNumber>()?.value() as u32;
+      let height = call.arguments.require(scope, 1)?.check::<JsNumber>()?.value() as u32;
+
+      Ok(Terminal::new(width, height))
     }
 
     method write(call) {
