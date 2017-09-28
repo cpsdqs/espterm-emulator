@@ -503,13 +503,21 @@ impl Terminal {
         self.update_screen();
     }
 
-    pub fn get_cursor(&self) -> [u32; 3] {
-        let cursor_x = if self.state.cursor.x == self.width as i32 {
+    pub fn get_cursor(&self) -> String {
+        let cursor_x = if self.is_cursor_hanging() {
             self.state.cursor.x - 1
         } else {
             self.state.cursor.x
         };
-        [cursor_x as u32, self.state.cursor.y as u32, if self.state.cursor.x == self.width as i32 { 1 } else { 0 }]
+        let mut cursor = String::new();
+        cursor.push(encode_as_code_point(self.state.cursor.y as u32));
+        cursor.push(encode_as_code_point(cursor_x as u32));
+        if self.is_cursor_hanging() {
+            cursor.push(encode_as_code_point(1));
+        } else {
+            cursor.push(encode_as_code_point(0));
+        }
+        cursor
     }
 
     pub fn get_attributes(&self) -> u32 {

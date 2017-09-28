@@ -179,12 +179,10 @@ ws.on('connection', (ws, request) => {
       topicFlags |= topics.bell
       topicData.push('!')
     }
-    if (cursor.join() !== lastCursor) {
-      lastCursor = cursor.join()
+    if (cursor !== lastCursor) {
+      lastCursor = cursor
       topicFlags |= topics.changeCursor
-      let data = 'C'
-      data += cursor.map(x => encodeAsCodePoint(x)).join('')
-      topicData.push(data)
+      topicData.push(`C${cursor}`)
     }
     if (stateID !== lastStateID) {
       lastStateID = stateID

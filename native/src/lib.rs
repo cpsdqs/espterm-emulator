@@ -4,7 +4,7 @@ extern crate neon;
 pub mod terminal;
 
 use neon::vm::{Lock};
-use neon::js::{JsFunction, JsNumber, JsString, Object, JsArray};
+use neon::js::{JsFunction, JsNumber, JsString, Object};
 use neon::js::class::{Class, JsClass};
 use neon::mem::Handle;
 
@@ -36,11 +36,7 @@ declare_types! {
       let scope = call.scope;
 
       let cursor = call.arguments.this(scope).grab(|terminal| { terminal.get_cursor().clone() });
-      let array = JsArray::new(scope, 3);
-      array.set(0, JsNumber::new(scope, cursor[0] as f64)).unwrap();
-      array.set(1, JsNumber::new(scope, cursor[1] as f64)).unwrap();
-      array.set(2, JsNumber::new(scope, cursor[2] as f64)).unwrap();
-      Ok(JsArray::new(scope, 3).upcast())
+      Ok(JsString::new_or_throw(scope, &cursor)?.upcast())
     }
 
     method serializeScreen(call) {
