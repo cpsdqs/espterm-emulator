@@ -74,13 +74,25 @@ app.get('/system/ping', (req, res) => {
 let decode2B = (str, i) =>
   str.charCodeAt(i) - 1 + (str.charCodeAt(i + 1) - 1) * 127
 
+let encodeAsCodePoint = i => String.fromCodePoint(i + 1)
+
+const topics = {
+  changeScreenOpts: 1,
+  changeContentAll: 1 << 1,
+  changeContentPart: 1 << 2,
+  changeTitle: 1 << 3,
+  changeButtons: 1 << 4,
+  changeCursor: 1 << 5,
+  internal: 1 << 6,
+  bell: 1 << 7
+}
+
+let getAttributes = () => shell.terminal.getAttributes()
 let getStateID = () => shell.terminal.getStateID()
 let getTitle = () => shell.terminal.getTitle()
 let getBellID = () => shell.terminal.getBellID()
-
-let getUpdateString = function () {
-  return shell.terminal.serialize(Date.now() / 1000)
-}
+let getScreen = () => shell.terminal.serializeScreen(Date.now() / 1000)
+let getCursor = () => shell.terminal.getCursor()
 
 let getTitleStringFor = function (title) {
   let buttons = []
@@ -117,29 +129,75 @@ ws.on('connection', (ws, request) => {
   const ip = request.connection.remoteAddress
   console.log(`connected from ${ip} (${connections} connection${connections === 1 ? '' : 's'})`)
 
-  let updateTitle = title => trySend(getTitleStringFor(title))
-  let emitBell = () => trySend('B')
-
+  let lastAttributes = null
   let lastStateID = null
   let lastBellID = getBellID()
   let lastTitle = null
+  let lastCursor = null
+  let sentButtons = false
 
   let update = () => {
-    let stateID = getStateID()
-    if (stateID !== lastStateID) {
-      trySend(getUpdateString())
-      lastStateID = stateID
-    }
+    let data = 'U'
+
+    let topicFlags = 0
+    let topicData = []
+
+    // check what changed
+    let attributes = getAttributes()
+    let stateID = getStateID() // tracks screen updates
     let bellID = getBellID()
-    if (bellID !== lastBellID) {
-      emitBell()
-      lastBellID = bellID
-    }
     let title = getTitle()
-    if (lastTitle !== title) {
-      updateTitle(title)
-      lastTitle = title
+    let cursor = getCursor()
+
+    if (attributes !== lastAttributes) {
+      lastAttributes = attributes
+
+      topicFlags |= topics.changeScreenOpts
+      let data = 'O'
+      data += encodeAsCodePoint(shell.terminal.height())
+      data += encodeAsCodePoint(shell.terminal.width())
+      data += encodeAsCodePoint(variables.theme)
+      data += encodeAsCodePoint(variables.default_fg & 0xFFF)
+      data += encodeAsCodePoint((variables.default_fg >> 24) & 0xFFF)
+      data += encodeAsCodePoint(variables.default_bg & 0xFFF)
+      data += encodeAsCodePoint((variables.default_bg >> 24) & 0xFFF)
+      data += encodeAsCodePoint(attributes)
+      topicData.push(data)
     }
+    if (title !== lastTitle) {
+      lastTitle = title
+      topicFlags |= topics.changeTitle
+      topicData.push(`T${title}\x01`)
+    }
+    if (!sentButtons) {
+      sentButtons = true
+      topicFlags |= topics.changeButtons
+      topicData.push(`B${encodeAsCodePoint(5)}1\x012\x013\x014\x015\x01`)
+    }
+    if (bellID !== lastBellID) {
+      lastBellID = bellID
+      topicFlags |= topics.bell
+      topicData.push('!')
+    }
+    if (cursor.join() !== lastCursor) {
+      lastCursor = cursor.join()
+      topicFlags |= topics.changeCursor
+      let data = 'C'
+      data += cursor.map(x => encodeAsCodePoint(x)).join('')
+      topicData.push(data)
+    }
+    if (stateID !== lastStateID) {
+      lastStateID = stateID
+      topicFlags |= topics.changeContentAll
+      topicData.push(getScreen())
+    }
+
+    if (!topicFlags) return
+
+    data += encodeAsCodePoint(topicFlags)
+    data += topicData.join('')
+
+    trySend(data)
   }
 
   let updateInterval = setInterval(update, 30);

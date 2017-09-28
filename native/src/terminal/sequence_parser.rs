@@ -205,33 +205,33 @@ impl SequenceParser {
                                             // reset
                                             0 => self.stack.push(Action::ResetStyle),
                                             // bold
-                                            1 => self.stack.push(Action::AddAttrs(1)),
+                                            1 => self.stack.push(Action::AddAttrs(1 << 2)),
                                             // faint
-                                            2 => self.stack.push(Action::AddAttrs(1 << 1)),
+                                            2 => self.stack.push(Action::AddAttrs(1 << 9)),
                                             // italic
-                                            3 => self.stack.push(Action::AddAttrs(1 << 2)),
+                                            3 => self.stack.push(Action::AddAttrs(1 << 6)),
                                             // underline
                                             4 => self.stack.push(Action::AddAttrs(1 << 3)),
                                             // blink
-                                            5 | 6 => self.stack.push(Action::AddAttrs(1 << 4)),
+                                            5 | 6 => self.stack.push(Action::AddAttrs(1 << 5)),
                                             // invert
-                                            7 => self.stack.push(Action::AddAttrs(1 << 10)),
+                                            7 => self.stack.push(Action::AddAttrs(1 << 4)),
                                             // strike
-                                            9 => self.stack.push(Action::AddAttrs(1 << 6)),
+                                            9 => self.stack.push(Action::AddAttrs(1 << 7)),
                                             // fraktur
-                                            20 => self.stack.push(Action::AddAttrs(1 << 5)),
+                                            20 => self.stack.push(Action::AddAttrs(1 << 10)),
                                             // remove bold
-                                            21 => self.stack.push(Action::RemoveAttrs(1)),
+                                            21 => self.stack.push(Action::RemoveAttrs(1 << 2)),
                                             // remove bold and faint
-                                            22 => self.stack.push(Action::RemoveAttrs(0b11)),
+                                            22 => self.stack.push(Action::RemoveAttrs((1 << 2) | (1 << 9))),
                                             // remove italic and fraktur
-                                            23 => self.stack.push(Action::RemoveAttrs(0b100100)),
+                                            23 => self.stack.push(Action::RemoveAttrs((1 << 6) | (1 << 10))),
                                             // remove underline
                                             24 => self.stack.push(Action::RemoveAttrs(1 << 3)),
                                             // remove blink
-                                            25 => self.stack.push(Action::RemoveAttrs(1 << 4)),
+                                            25 => self.stack.push(Action::RemoveAttrs(1 << 5)),
                                             // remove inverse
-                                            27 => self.stack.push(Action::RemoveAttrs(1 << 10)),
+                                            27 => self.stack.push(Action::RemoveAttrs(1 << 4)),
                                             // set foreground
                                             color @ 30...37 => {
                                                 self.stack.push(Action::SetColorFG(color as u32 % 10))
@@ -302,7 +302,15 @@ impl SequenceParser {
                             }
                         }
                         b'h' | b'l' => {
-                            // TODO
+                            match &content as &str {
+                                "?25h" => self.stack.push(Action::SetCursorVisible(true)),
+                                "?25l" => self.stack.push(Action::SetCursorVisible(false)),
+                                // TODO: proper behavior
+                                "?1049h" => self.stack.push(Action::SetAltBuffer(true)),
+                                "?1049l" => self.stack.push(Action::SetAltBuffer(false)),
+                                // TODO
+                                _ => ()
+                            };
                         }
                         _ => (),
                     }

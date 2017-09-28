@@ -4,7 +4,7 @@ extern crate neon;
 pub mod terminal;
 
 use neon::vm::{Lock};
-use neon::js::{JsFunction, JsNumber, JsString, Object};
+use neon::js::{JsFunction, JsNumber, JsString, Object, JsArray};
 use neon::js::class::{Class, JsClass};
 use neon::mem::Handle;
 
@@ -32,12 +32,23 @@ declare_types! {
       Ok(JsNumber::new(scope, 0f64).upcast())
     }
 
-    method serialize(call) {
+    method getCursor(call) {
+      let scope = call.scope;
+
+      let cursor = call.arguments.this(scope).grab(|terminal| { terminal.get_cursor().clone() });
+      let array = JsArray::new(scope, 3);
+      array.set(0, JsNumber::new(scope, cursor[0] as f64)).unwrap();
+      array.set(1, JsNumber::new(scope, cursor[1] as f64)).unwrap();
+      array.set(2, JsNumber::new(scope, cursor[2] as f64)).unwrap();
+      Ok(JsArray::new(scope, 3).upcast())
+    }
+
+    method serializeScreen(call) {
       let scope = call.scope;
 
       let time = call.arguments.require(scope, 0)?.check::<JsNumber>()?.value();
       let serialized = call.arguments.this(scope).grab(|terminal| {
-        terminal.serialize(time).clone()
+        terminal.serialize_screen(time).clone()
       });
       Ok(JsString::new_or_throw(scope, &serialized[..])?.upcast())
     }
@@ -54,6 +65,13 @@ declare_types! {
 
       let height = call.arguments.this(scope).grab(|terminal| terminal.height.clone());
       Ok(JsNumber::new(scope, height as f64).upcast())
+    }
+
+    method getAttributes(call) {
+      let scope = call.scope;
+
+      let attributes = call.arguments.this(scope).grab(|terminal| terminal.get_attributes().clone());
+      Ok(JsNumber::new(scope, attributes as f64).upcast())
     }
 
     method getStateID(call) {

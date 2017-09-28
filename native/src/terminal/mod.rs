@@ -452,14 +452,14 @@ impl Terminal {
             RemoveAttrs(attrs) => self.state.style.attrs &= !attrs,
             SetColorFG(color) => {
                 self.state.style.fg = color;
-                self.state.style.attrs |= 1 << 8; // set has_fg
+                self.state.style.attrs |= 1 << 0; // set attr_fg
             }
             SetColorBG(color) => {
                 self.state.style.bg = color;
-                self.state.style.attrs |= 1 << 9; // set has_bg
+                self.state.style.attrs |= 1 << 1; // set attr_bg
             }
-            ResetColorFG => self.state.style.attrs &= !(1 << 8),
-            ResetColorBG => self.state.style.attrs &= !(1 << 9),
+            ResetColorFG => self.state.style.attrs &= !(1 << 0),
+            ResetColorBG => self.state.style.attrs &= !(1 << 1),
             SetWindowTitle(title) => self.state.title = title,
             SetRainbowMode(enabled) => self.state.rainbow = enabled,
             Bell => self.state.bell_id += 1,
@@ -503,24 +503,35 @@ impl Terminal {
         self.update_screen();
     }
 
-    pub fn serialize(&self, time: f64) -> String {
-        let mut data = String::from("S");
-        data.push(encode_as_code_point(self.height));
-        data.push(encode_as_code_point(self.width));
-        data.push(encode_as_code_point(self.state.cursor.y as u32));
-        data.push(encode_as_code_point(self.state.cursor.x as u32));
-
-        let mut attributes = if self.state.cursor.visible {
-            1u32
+    pub fn get_cursor(&self) -> [u32; 3] {
+        let cursor_x = if self.state.cursor.x == self.width as i32 {
+            self.state.cursor.x - 1
         } else {
-            0u32
+            self.state.cursor.x
         };
+        [cursor_x as u32, self.state.cursor.y as u32, if self.state.cursor.x == self.width as i32 { 1 } else { 0 }]
+    }
+
+    pub fn get_attributes(&self) -> u32 {
+        let mut attributes = 0u32;
+
+        // show buttons/links
+        attributes |= 1 << 7;
+        attributes |= 1 << 8;
+
+        if self.state.cursor.visible {
+            attributes |= 1;
+        }
         if self.state.track_mouse {
             attributes |= 3 << 5;
         }
-        attributes |= 3 << 7;
         attributes |= (self.state.cursor.style as u32) << 9;
-        data.push(encode_as_code_point(attributes));
+
+        attributes
+    }
+
+    pub fn serialize_screen(&self, time: f64) -> String {
+        let mut data = String::from("S");
 
         let mut last_style = CellStyle::new();
 
