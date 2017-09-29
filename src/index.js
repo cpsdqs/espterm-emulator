@@ -18,7 +18,7 @@ console.log(`Using ${base}`)
 
 const app = express()
 
-let applyTemplate = function (file) {
+let applyTemplate = function (file, path = '') {
   file = file.toString()
   file = file.replace(/%[\w:]+%/g, match => {
     let value = variables[match.replace(/%(\w:)?/g, '')]
@@ -35,7 +35,7 @@ let serveTemplate = function (res, path) {
       console.log(err)
     } else {
       res.set('Content-Type', 'text/html')
-      res.send(applyTemplate(file))
+      res.send(applyTemplate(file, path))
     }
   })
 }
@@ -51,6 +51,10 @@ app.get('/about', (req, res) => serveTemplate(res, 'about.tpl'))
 app.get(/^\/cfg\/\w+\/set/, (req, res) => {
   Object.assign(variables, req.query)
   res.redirect(req.path.replace('/set', ''))
+  if ('default_fg' in req.query || 'default_bg' in req.query || 'theme' in req.query) {
+    // hack
+    shell.emit('update-theme')
+  }
 })
 app.get('/cfg/wifi/scan', (req, res) => {
   res.send(JSON.stringify({
@@ -74,7 +78,7 @@ app.get('/system/ping', (req, res) => {
 let decode2B = (str, i) =>
   str.charCodeAt(i) - 1 + (str.charCodeAt(i + 1) - 1) * 127
 
-let encodeAsCodePoint = i => String.fromCodePoint(i + 1)
+let encodeAsCodePoint = i => String.fromCodePoint(+i + 1)
 
 const topics = {
   changeScreenOpts: 1,
@@ -136,6 +140,8 @@ ws.on('connection', (ws, request) => {
   let lastCursor = null
   let sentButtons = false
 
+  let clearAttributes = () => lastAttributes = null
+
   let update = () => {
     let data = 'U'
 
@@ -157,10 +163,14 @@ ws.on('connection', (ws, request) => {
       data += encodeAsCodePoint(shell.terminal.height())
       data += encodeAsCodePoint(shell.terminal.width())
       data += encodeAsCodePoint(variables.theme)
-      data += encodeAsCodePoint(variables.default_fg & 0xFFF)
-      data += encodeAsCodePoint((variables.default_fg >> 24) & 0xFFF)
-      data += encodeAsCodePoint(variables.default_bg & 0xFFF)
-      data += encodeAsCodePoint((variables.default_bg >> 24) & 0xFFF)
+      let defaultFG = variables.default_fg
+      let defaultBG = variables.default_bg
+      if (defaultFG.toString().match(/^#[\da-f]{6}$/)) defaultFG = parseInt(defaultFG.substr(1), 16) + 256
+      if (defaultBG.toString().match(/^#[\da-f]{6}$/)) defaultBG = parseInt(defaultBG.substr(1), 16) + 256
+      data += encodeAsCodePoint(defaultFG & 0xFFF)
+      data += encodeAsCodePoint((defaultFG >> 12) & 0xFFF)
+      data += encodeAsCodePoint(defaultBG & 0xFFF)
+      data += encodeAsCodePoint((defaultBG >> 12) & 0xFFF)
       data += encodeAsCodePoint(attributes)
       topicData.push(data)
     }
@@ -204,6 +214,8 @@ ws.on('connection', (ws, request) => {
     trySend('.')
   }, 1000)
 
+  shell.on('update-theme', clearAttributes)
+
   ws.on('message', message => {
     let type = message[0]
     let content = message.slice(1)
@@ -233,6 +245,7 @@ ws.on('connection', (ws, request) => {
   ws.on('close', () => {
     clearInterval(heartbeat)
     clearInterval(updateInterval)
+    shell.removeListener('update-theme', clearAttributes)
     connections--
     console.log(`disconnected ${ip} (${connections} connection${connections === 1 ? '' : 's'} left)`)
   })

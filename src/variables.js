@@ -25,7 +25,6 @@ let getShortISOTime = function () {
 // various variables used by the TPL files
 module.exports = {
   theme: 0,
-  themeCount: 6,
   labels_seq: 'T<init from JS>\x01\x01\x01\x01\x01',
   default_fg: 7,
   default_bg: 0,
