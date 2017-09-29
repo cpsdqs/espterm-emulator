@@ -541,6 +541,12 @@ impl Terminal {
     pub fn serialize_screen(&self, time: f64) -> String {
         let mut data = String::from("S");
 
+        // set frame to full size
+        data.push(encode_as_code_point(0));
+        data.push(encode_as_code_point(0));
+        data.push(encode_as_code_point(self.height));
+        data.push(encode_as_code_point(self.width));
+
         let mut last_style = CellStyle::new();
 
         for y in 0..self.height {
