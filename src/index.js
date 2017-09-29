@@ -120,7 +120,7 @@ const ws = new WebSocket.Server({ server })
 let connections = 0
 
 ws.on('connection', (ws, request) => {
-  if (connections >= 1) {
+  if (connections >= 2) {
     ws.close()
     return
   }

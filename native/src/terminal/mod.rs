@@ -556,7 +556,7 @@ impl Terminal {
                     CellStyle {
                         fg: get_rainbow_color(((x + y) as f64) / 10.0 + time) as u32,
                         bg: 0,
-                        ..cell.style
+                        attrs: cell.style.attrs | 3
                     }
                 } else {
                     cell.style.clone()
