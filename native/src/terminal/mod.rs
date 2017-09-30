@@ -145,7 +145,11 @@ fn get_rainbow_color(t: f64) -> u32 {
 fn encode_as_code_point(n: u32) -> char {
     // this is unsafe but I don't think C (i.e. ESPTerm) cares either
     unsafe {
-        std::char::from_u32_unchecked(n + 1)
+        if n > 0xD800 {
+            std::char::from_u32_unchecked(n + 0x801)
+        } else {
+            std::char::from_u32_unchecked(n + 1)
+        }
     }
 }
 
