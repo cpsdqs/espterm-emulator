@@ -168,10 +168,10 @@ ws.on('connection', (ws, request) => {
       let defaultBG = variables.default_bg
       if (defaultFG.toString().match(/^#[\da-f]{6}$/)) defaultFG = parseInt(defaultFG.substr(1), 16) + 256
       if (defaultBG.toString().match(/^#[\da-f]{6}$/)) defaultBG = parseInt(defaultBG.substr(1), 16) + 256
-      data += encodeAsCodePoint(defaultFG & 0xFFF)
-      data += encodeAsCodePoint((defaultFG >> 12) & 0xFFF)
-      data += encodeAsCodePoint(defaultBG & 0xFFF)
-      data += encodeAsCodePoint((defaultBG >> 12) & 0xFFF)
+      data += encodeAsCodePoint(defaultFG & 0xFFFF)
+      data += encodeAsCodePoint((defaultFG >> 16))
+      data += encodeAsCodePoint(defaultBG & 0xFFFF)
+      data += encodeAsCodePoint((defaultBG >> 16))
       data += encodeAsCodePoint(attributes)
       topicData.push(data)
     }
