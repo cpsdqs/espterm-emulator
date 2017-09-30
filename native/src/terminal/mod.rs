@@ -49,7 +49,7 @@ impl CursorState {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct ScreenCell {
     text: char,
     style: CellStyle,
@@ -111,7 +111,8 @@ struct TerminalState {
     state_id: u32,
     title: String,
     bell_id: u32,
-    bracketed_paste: bool
+    bracketed_paste: bool,
+    last_screen: Box<[ScreenCell]>
 }
 
 impl TerminalState {
@@ -130,7 +131,8 @@ impl TerminalState {
             state_id: 0,
             title: String::new(),
             bell_id: 0,
-            bracketed_paste: false
+            bracketed_paste: false,
+            last_screen: Box::new([])
         }
     }
 }
@@ -570,19 +572,89 @@ impl Terminal {
         attributes
     }
 
-    pub fn serialize_screen(&self, time: f64) -> String {
-        let mut data = String::from("S");
+    fn flatten_screen(&self) -> Box<[ScreenCell]> {
+        let mut screen_vec: Vec<ScreenCell> = vec![];
 
-        // set frame to full size
-        data.push(encode_as_code_point(0));
-        data.push(encode_as_code_point(0));
-        data.push(encode_as_code_point(self.height));
-        data.push(encode_as_code_point(self.width));
+        for y in 0..(self.height as usize) {
+            for x in 0..(self.width as usize) {
+                screen_vec.push(self.state.buffer.lines[y][x].clone());
+            }
+        }
 
-        let mut last_style = CellStyle::new();
+        screen_vec.into_boxed_slice()
+    }
+
+    fn get_screen_updates(&self, last: &[ScreenCell]) -> Box<[bool]> {
+        let mut update_vec: Vec<bool> = vec![];
+        for _ in 0..(self.width * self.height) {
+            update_vec.push(false);
+        }
+
+        let mut updates = update_vec.into_boxed_slice();
 
         for y in 0..self.height {
             for x in 0..self.width {
+                let cell = (y * self.width + x) as usize;
+                if let Some(last_cell) = last.get(cell) {
+                    if &self.state.buffer.lines[y as usize][x as usize] != last_cell {
+                        updates[cell] = true
+                    }
+                } else {
+                    updates[cell] = true
+                }
+            }
+        }
+
+        updates
+    }
+
+    pub fn serialize_screen(&mut self, time: f64) -> String {
+        let mut data = String::from("S");
+
+        // get frame
+        let mut top = self.height as i32;
+        let mut left = self.width as i32;
+        let mut right = 0;
+        let mut bottom = 0;
+
+        let screen_updates = self.get_screen_updates(&self.state.last_screen);
+
+        self.state.last_screen = self.flatten_screen();
+
+        for cell in 0..(screen_updates.len() as i32) {
+            if screen_updates[cell as usize] {
+                let y = cell / (self.width as i32);
+                let x = cell % (self.width as i32);
+                if x < left {
+                    left = x;
+                }
+                if x >= right {
+                    right = x + 1;
+                }
+                if y < top {
+                    top = y;
+                }
+                if y >= bottom {
+                    bottom = y + 1;
+                }
+            }
+        }
+
+        if right <= left || bottom <= top {
+            // return nothing
+            return String::new()
+        }
+
+        // set frame to full size
+        data.push(encode_as_code_point(top as u32));
+        data.push(encode_as_code_point(left as u32));
+        data.push(encode_as_code_point((bottom - top) as u32));
+        data.push(encode_as_code_point((right - left) as u32));
+
+        let mut last_style = CellStyle::new();
+
+        for y in top..bottom {
+            for x in left..right {
                 let cell = &self.state.buffer.lines[y as usize][x as usize];
                 let style = if self.state.rainbow {
                     CellStyle {

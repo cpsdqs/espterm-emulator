@@ -121,7 +121,7 @@ const ws = new WebSocket.Server({ server })
 let connections = 0
 
 ws.on('connection', (ws, request) => {
-  if (connections >= 2) {
+  if (connections >= 1) {
     ws.close()
     return
   }
@@ -187,8 +187,8 @@ ws.on('connection', (ws, request) => {
       data += encodeAsCodePoint(variables.theme)
       let defaultFG = variables.default_fg
       let defaultBG = variables.default_bg
-      if (defaultFG.toString().match(/^#[\da-f]{6}$/)) defaultFG = parseInt(defaultFG.substr(1), 16) + 256
-      if (defaultBG.toString().match(/^#[\da-f]{6}$/)) defaultBG = parseInt(defaultBG.substr(1), 16) + 256
+      if (defaultFG.toString().match(/^#[\da-f]{6}$/i)) defaultFG = parseInt(defaultFG.substr(1), 16) + 256
+      if (defaultBG.toString().match(/^#[\da-f]{6}$/i)) defaultBG = parseInt(defaultBG.substr(1), 16) + 256
       data += encodeAsCodePoint(defaultFG & 0xFFFF)
       data += encodeAsCodePoint((defaultFG >> 16))
       data += encodeAsCodePoint(defaultBG & 0xFFFF)
@@ -225,7 +225,7 @@ ws.on('connection', (ws, request) => {
       lastStateID = stateID
 
       let screen = getScreen()
-      if (screen !== lastScreen) {
+      if (screen && screen !== lastScreen) {
         lastScreen = screen
         topicFlags |= topics.changeContentAll
         topicData.push(screen)
