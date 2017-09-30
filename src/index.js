@@ -4,6 +4,7 @@ const http = require('http')
 const path = require('path')
 const url = require('url')
 const fs = require('fs')
+const os = require('os')
 
 const shell = require('./shell')
 const variables = require('./variables')
@@ -139,6 +140,8 @@ ws.on('connection', (ws, request) => {
   let lastBellID = getBellID()
   let lastTitle = null
   let lastCursor = null
+  let lastInternal = null
+  let lastInternalTime = 0
   let sentButtons = false
 
   let clearAttributes = () => lastAttributes = null
@@ -155,6 +158,24 @@ ws.on('connection', (ws, request) => {
     let bellID = getBellID()
     let title = getTitle()
     let cursor = getCursor()
+    let internal
+
+    {
+      if (Date.now() - lastInternalTime > 1000) {
+        lastInternalTime = Date.now()
+        internal = 'D'
+        let attrs = 0
+        internal += encodeAsCodePoint(attrs)
+        internal += encodeAsCodePoint(0)
+        internal += encodeAsCodePoint(0)
+        internal += encodeAsCodePoint(0)
+        internal += encodeAsCodePoint(0)
+        internal += encodeAsCodePoint(0)
+        internal += encodeAsCodePoint(0)
+        internal += encodeAsCodePoint(Math.round(os.freemem() / 1000))
+        internal += encodeAsCodePoint(connections)
+      } else internal = lastInternal
+    }
 
     if (attributes !== lastAttributes) {
       lastAttributes = attributes
@@ -189,6 +210,11 @@ ws.on('connection', (ws, request) => {
       lastBellID = bellID
       topicFlags |= topics.bell
       topicData.push('!')
+    }
+    if (internal !== lastInternal) {
+      lastInternal = internal
+      topicFlags |= topics.internal
+      topicData.push(internal)
     }
     if (cursor !== lastCursor) {
       lastCursor = cursor
