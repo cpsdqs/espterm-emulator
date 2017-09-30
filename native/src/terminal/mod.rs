@@ -149,24 +149,16 @@ fn encode_as_code_point(n: u32) -> char {
     }
 }
 
-fn full_value_to_256(value: u32) -> u32 {
-    if value < 55 {
-        0
-    } else {
-        1 + (value - 55) / 40
-    }
-}
-
-fn ensure_color_256(color: u32) -> u32 {
+fn encode_24color(color: u32) -> String {
+    let mut result = String::new();
     if color < 256 {
-        color
+        result.push(encode_as_code_point(color));
     } else {
         let color = color - 256;
-        let b = full_value_to_256(color & 0xFF);
-        let g = full_value_to_256((color >> 8) & 0xFF);
-        let r = full_value_to_256((color >> 16) & 0xFF);
-        16 + 36 * r + 6 * g + b
+        result.push(encode_as_code_point(color & 0xFFF | 0x10000));
+        result.push(encode_as_code_point((color >> 12) & 0xFFF));
     }
+    result
 }
 
 pub struct Terminal {
@@ -609,16 +601,16 @@ impl Terminal {
                             data.push(encode_as_code_point((style.bg << 8) + style.fg));
                         } else {
                             data.push('\x05');
-                            data.push(encode_as_code_point(ensure_color_256(style.fg)));
+                            data.push_str(&encode_24color(style.fg));
                             data.push('\x06');
-                            data.push(encode_as_code_point(ensure_color_256(style.bg)));
+                            data.push_str(&encode_24color(style.bg));
                         }
                     } else if set_fg {
                         data.push('\x05');
-                        data.push(encode_as_code_point(ensure_color_256(style.fg)));
+                        data.push_str(&encode_24color(style.fg));
                     } else if set_bg {
                         data.push('\x06');
-                        data.push(encode_as_code_point(ensure_color_256(style.bg)));
+                        data.push_str(&encode_24color(style.bg));
                     }
 
                     if set_attrs {
