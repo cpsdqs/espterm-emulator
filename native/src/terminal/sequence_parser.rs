@@ -35,13 +35,16 @@ pub enum ClearType {
 pub enum Action {
     SetCursor(u32, u32),
     SetCursorX(u32),
+    SetCursorLine(u32),
     MoveCursor(i32, i32),
     MoveCursorLine(i32),
+    MoveCursorLineWithScroll(i32),
     ClearScreen(ClearType),
     ClearLine(ClearType),
     InsertLines(u32),
     DeleteLines(u32),
     DeleteForward(u32),
+    EraseForward(u32),
     Scroll(i32),
     InsertBlanks(u32),
     SetCursorStyle(u8),
@@ -57,6 +60,7 @@ pub enum Action {
     SetColorBG(u32),
     ResetColorFG,
     ResetColorBG,
+    SetBracketedPaste(bool),
     SetWindowTitle(String),
     SetRainbowMode(bool),
     Interrupt,
@@ -179,7 +183,9 @@ impl SequenceParser {
                         b'P' => self.stack.push(Action::DeleteForward(num_or_one as u32)),
                         b'S' => self.stack.push(Action::Scroll(1)),
                         b'T' => self.stack.push(Action::Scroll(-1)),
+                        b'X' => self.stack.push(Action::EraseForward(num_or_one as u32)),
                         b'@' => self.stack.push(Action::InsertBlanks(num_or_one as u32)),
+                        b'd' => self.stack.push(Action::SetCursorLine(num_or_one as u32)),
                         b'q' => self.stack.push(Action::SetCursorStyle(num_or_one as u8)),
                         b'r' => {
                             let top = match numbers.get(0) {
@@ -293,7 +299,9 @@ impl SequenceParser {
                                                     break;
                                                 }
                                             }
-                                            _ => (),
+                                            _ => {
+                                                println!("Unhandled SGR: {}", sequence);
+                                            },
                                         }
                                     } else {
                                         break;
@@ -303,16 +311,23 @@ impl SequenceParser {
                         }
                         b'h' | b'l' => {
                             match &content as &str {
-                                "?25h" => self.stack.push(Action::SetCursorVisible(true)),
-                                "?25l" => self.stack.push(Action::SetCursorVisible(false)),
-                                // TODO: proper behavior
-                                "?1049h" => self.stack.push(Action::SetAltBuffer(true)),
-                                "?1049l" => self.stack.push(Action::SetAltBuffer(false)),
+                                "?25" => self.stack.push(Action::SetCursorVisible(action == b'h')),
+                                "?1049" => {
+                                    // TODO: proper behavior
+                                    self.stack.push(Action::SetAltBuffer(action == b'h'));
+                                }
+                                "?2004" => {
+                                    self.stack.push(Action::SetBracketedPaste(action == b'h'));
+                                }
                                 // TODO
-                                _ => ()
+                                _ => {
+                                    println!("Unhandled mode: {}", sequence);
+                                }
                             };
                         }
-                        _ => (),
+                        _ => {
+                            println!("Unhandled ANSI sequence: {}", sequence);
+                        }
                     }
                 }
                 b']' => {
@@ -340,7 +355,12 @@ impl SequenceParser {
                         }
                     }
                 }
-                _ => (),
+                b'B' => (), // I have no idea what it does, but fish uses it plenty
+                b'D' => self.stack.push(Action::MoveCursorLineWithScroll(1)),
+                b'M' => self.stack.push(Action::MoveCursorLineWithScroll(-1)),
+                _ => {
+                    println!("Unhandled escape: {}", sequence);
+                },
             };
         }
         self.state.reset();
@@ -380,6 +400,9 @@ impl SequenceParser {
                 if character == '\\' {
                     // ST
                     self.state.reset()
+                } else {
+                    self.state.sequence.push(character);
+                    self.apply_sequence();
                 }
             } else if self.state.sequence_type != SequenceType::None {
                 self.state.sequence.push(character);

@@ -110,7 +110,8 @@ struct TerminalState {
     scroll_margin_bottom: u32,
     state_id: u32,
     title: String,
-    bell_id: u32
+    bell_id: u32,
+    bracketed_paste: bool
 }
 
 impl TerminalState {
@@ -128,7 +129,8 @@ impl TerminalState {
             scroll_margin_bottom: height as u32,
             state_id: 0,
             title: String::new(),
-            bell_id: 0
+            bell_id: 0,
+            bracketed_paste: false
         }
     }
 }
@@ -328,6 +330,17 @@ impl Terminal {
         }
     }
 
+    pub fn erase_forward(&mut self, count: u32) {
+        let end_index = std::cmp::min(self.width, self.state.cursor.x as u32 + count);
+        let mut line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
+        for i in (self.state.cursor.x as u32)..end_index {
+            line[i as usize] = ScreenCell {
+                text: ' ',
+                style: self.state.style.clone()
+            };
+        }
+    }
+
     pub fn insert_blanks(&mut self, count: u32) {
         let mut line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
         let end_x = self.state.cursor.x + (count as i32) - 1;
@@ -385,6 +398,10 @@ impl Terminal {
                 self.state.cursor.x = x as i32;
                 self.clamp_cursor();
             }
+            SetCursorLine(y) => {
+                self.state.cursor.y = y as i32;
+                self.clamp_cursor();
+            }
             MoveCursor(x, y) => {
                 self.state.cursor.x += x;
                 self.state.cursor.y += y;
@@ -394,6 +411,16 @@ impl Terminal {
                 self.state.cursor.x = 0;
                 self.state.cursor.y += y;
                 self.clamp_cursor();
+            }
+            MoveCursorLineWithScroll(y) => {
+                self.state.cursor.y += y;
+                if self.state.cursor.y < 0 {
+                    let cursor_y = self.state.cursor.y;
+                    self.scroll(cursor_y, true);
+                } else if self.state.cursor.y >= self.height as i32 {
+                    let cursor_y_diff = self.state.cursor.y - (self.height as i32);
+                    self.scroll(cursor_y_diff + 1, true);
+                }
             }
             ClearScreen(clear_type) => {
                 let cursor_x = self.state.cursor.x as u32;
@@ -430,6 +457,7 @@ impl Terminal {
             InsertLines(count) => self.insert_lines(count),
             DeleteLines(count) => self.delete_lines(count),
             DeleteForward(count) => self.delete_forward(count),
+            EraseForward(count) => self.erase_forward(count),
             Scroll(count) => self.scroll(count, true),
             InsertBlanks(count) => self.insert_blanks(count),
             SetCursorStyle(style) => self.state.cursor.style = style,
@@ -462,6 +490,7 @@ impl Terminal {
             ResetColorBG => self.state.style.attrs &= !(1 << 1),
             SetWindowTitle(title) => self.state.title = title,
             SetRainbowMode(enabled) => self.state.rainbow = enabled,
+            SetBracketedPaste(enabled) => self.state.bracketed_paste = enabled,
             Bell => self.state.bell_id += 1,
             Backspace => self.move_back(1),
             NewLine => self.new_line(),
@@ -471,7 +500,10 @@ impl Terminal {
                     self.write_char(character);
                 }
             }
-            _ => (),
+            Interrupt => (),
+            Tab => (),
+            DeleteLine => (),
+            DeleteWord => (),
         }
     }
 
@@ -534,6 +566,10 @@ impl Terminal {
             attributes |= 3 << 5;
         }
         attributes |= (self.state.cursor.style as u32) << 9;
+
+        if self.state.bracketed_paste {
+            attributes |= 1 << 13;
+        }
 
         attributes
     }

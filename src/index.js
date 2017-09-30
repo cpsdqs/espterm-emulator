@@ -135,6 +135,7 @@ ws.on('connection', (ws, request) => {
 
   let lastAttributes = null
   let lastStateID = null
+  let lastScreen = null
   let lastBellID = getBellID()
   let lastTitle = null
   let lastCursor = null
@@ -196,8 +197,13 @@ ws.on('connection', (ws, request) => {
     }
     if (stateID !== lastStateID) {
       lastStateID = stateID
-      topicFlags |= topics.changeContentAll
-      topicData.push(getScreen())
+
+      let screen = getScreen()
+      if (screen !== lastScreen) {
+        lastScreen = screen
+        topicFlags |= topics.changeContentAll
+        topicData.push(screen)
+      }
     }
 
     if (!topicFlags) return
