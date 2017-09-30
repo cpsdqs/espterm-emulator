@@ -135,11 +135,11 @@ impl TerminalState {
     }
 }
 
-fn get_rainbow_color(t: f64) -> u8 {
-    let r = (t.sin() * 2.5 + 2.5).floor() as u8;
-    let g = ((t + 2.0 / 3.0 * std::f64::consts::PI).sin() * 2.5 + 2.5).floor() as u8;
-    let b = ((t + 4.0 / 3.0 * std::f64::consts::PI).sin() * 2.5 + 2.5).floor() as u8;
-    16 + 36 * r + 6 * g + b
+fn get_rainbow_color(t: f64) -> u32 {
+    let r = (t.sin() * 127.0 + 127.0).floor() as u32;
+    let g = ((t + 2.0 / 3.0 * std::f64::consts::PI).sin() * 127.0 + 127.0).floor() as u32;
+    let b = ((t + 4.0 / 3.0 * std::f64::consts::PI).sin() * 127.0 + 127.0).floor() as u32;
+    ((r << 16) | (g << 8) | b) + 256
 }
 
 fn encode_as_code_point(n: u32) -> char {
@@ -582,7 +582,7 @@ impl Terminal {
                 let cell = &self.state.buffer.lines[y as usize][x as usize];
                 let style = if self.state.rainbow {
                     CellStyle {
-                        fg: get_rainbow_color(((x + y) as f64) / 10.0 + time) as u32,
+                        fg: get_rainbow_color(((x + y) as f64) / 10.0 + time),
                         bg: 0,
                         attrs: cell.style.attrs | 3
                     }
