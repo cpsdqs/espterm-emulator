@@ -489,6 +489,7 @@ impl Terminal {
             SetWindowTitle(title) => self.state.title = title,
             SetRainbowMode(enabled) => self.state.rainbow = enabled,
             SetBracketedPaste(enabled) => self.state.bracketed_paste = enabled,
+            SetMouseTracking(enabled) => self.state.track_mouse = enabled,
             Bell => self.state.bell_id += 1,
             Backspace => self.move_back(1),
             NewLine => self.new_line(),
@@ -561,7 +562,7 @@ impl Terminal {
             attributes |= 1;
         }
         if self.state.track_mouse {
-            attributes |= 3 << 5;
+            attributes |= 1 << 5;
         }
         attributes |= (self.state.cursor.style as u32) << 9;
 
@@ -570,6 +571,10 @@ impl Terminal {
         }
 
         attributes
+    }
+
+    pub fn is_tracking_mouse(&self) -> bool {
+        self.state.track_mouse
     }
 
     pub fn get_scroll_margin(&self) -> String {

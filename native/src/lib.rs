@@ -4,7 +4,7 @@ extern crate neon;
 pub mod terminal;
 
 use neon::vm::{Lock};
-use neon::js::{JsFunction, JsNumber, JsString, Object};
+use neon::js::{JsFunction, JsNumber, JsString, Object, JsBoolean};
 use neon::js::class::{Class, JsClass};
 use neon::mem::Handle;
 
@@ -104,6 +104,14 @@ declare_types! {
       call.arguments.this(scope).grab(|terminal| terminal.reset_partial_screen());
 
       Ok(JsNumber::new(scope, 0f64).upcast())
+    }
+
+    method isTrackingMouse(call) {
+      let scope = call.scope;
+
+      let is_tracking = call.arguments.this(scope).grab(|terminal| terminal.is_tracking_mouse());
+
+      Ok(JsBoolean::new(scope, is_tracking).upcast())
     }
   }
 }

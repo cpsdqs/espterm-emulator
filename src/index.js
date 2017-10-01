@@ -265,6 +265,32 @@ ws.on('connection', (ws, request) => {
       let button = decode2B(content, 4)
       let modifiers = decode2B(content, 6)
 
+      let ctrl = modifiers & 1
+      let shift = modifiers & 2
+      let alt = modifiers & 4
+      let meta = modifiers & 8
+
+      if (shell.terminal.isTrackingMouse()) {
+        // xterm only for now.
+        let x = column + 1
+        let y = row + 1
+        let eventCode = 0
+
+        if (button === 0 || (type === 'r')) eventCode = 3 // release
+        else if (button === 1) eventCode = 0
+        else if (button === 2) eventCode = 1
+        else if (button === 3) eventCode = 2
+        else if (button === 4) eventCode = 64
+        else if (button === 5) eventCode = 65
+
+        if (shift) eventCode |= 4
+        if (alt || meta) eventCode |= 8
+        if (ctrl) eventCode |= 16
+
+        let c = x => String.fromCodePoint(x)
+        shell.write(`\x1b[M${c(32 + eventCode)}${c(32 + x)}${c(32 + y)}`)
+      }
+
       /* if (shell.terminal.state.alternateBuffer && 4 <= button && button <= 5) {
         if (button === 4) {
           shell.write('\x1bOA')

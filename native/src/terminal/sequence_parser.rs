@@ -63,6 +63,7 @@ pub enum Action {
     SetBracketedPaste(bool),
     SetWindowTitle(String),
     SetRainbowMode(bool),
+    SetMouseTracking(bool),
     Interrupt,
     Bell,
     Backspace,
@@ -312,6 +313,7 @@ impl SequenceParser {
                         b'h' | b'l' => {
                             match &content as &str {
                                 "?25" => self.stack.push(Action::SetCursorVisible(action == b'h')),
+                                "?1000" => self.stack.push(Action::SetMouseTracking(action == b'h')),
                                 "?1049" => {
                                     // TODO: proper behavior
                                     self.stack.push(Action::SetAltBuffer(action == b'h'));
