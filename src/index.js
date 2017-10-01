@@ -127,6 +127,8 @@ ws.on('connection', (ws, request) => {
   }
   connections++
 
+  shell.terminal.resetPartial()
+
   let trySend = data => {
     if (ws.readyState === 1) ws.send(data)
   }
@@ -167,8 +169,7 @@ ws.on('connection', (ws, request) => {
         let attrs = 0
         internal += encodeAsCodePoint(attrs)
         internal += encodeAsCodePoint(0)
-        internal += encodeAsCodePoint(0)
-        internal += encodeAsCodePoint(0)
+        internal += shell.terminal.getScrollMargin()
         internal += encodeAsCodePoint(0)
         internal += encodeAsCodePoint(0)
         internal += encodeAsCodePoint(0)

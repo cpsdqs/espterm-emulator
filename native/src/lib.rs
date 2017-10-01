@@ -90,6 +90,21 @@ declare_types! {
       let bell_id = call.arguments.this(scope).grab(|terminal| terminal.get_bell_id().clone());
       Ok(JsNumber::new(scope, bell_id as f64).upcast())
     }
+
+    method getScrollMargin(call) {
+      let scope = call.scope;
+
+      let scroll_margin = call.arguments.this(scope).grab(|terminal| terminal.get_scroll_margin().clone());
+      Ok(JsString::new_or_throw(scope, &scroll_margin)?.upcast())
+    }
+
+    method resetPartial(call) {
+      let scope = call.scope;
+
+      call.arguments.this(scope).grab(|terminal| terminal.reset_partial_screen());
+
+      Ok(JsNumber::new(scope, 0f64).upcast())
+    }
   }
 }
 

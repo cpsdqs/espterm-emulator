@@ -572,6 +572,17 @@ impl Terminal {
         attributes
     }
 
+    pub fn get_scroll_margin(&self) -> String {
+        let mut result = String::new();
+        result.push(encode_as_code_point(self.state.scroll_margin_top));
+        result.push(encode_as_code_point(self.state.scroll_margin_bottom));
+        result
+    }
+
+    pub fn reset_partial_screen(&mut self) {
+        self.state.last_screen = Box::new([]);
+    }
+
     fn flatten_screen(&self) -> Box<[ScreenCell]> {
         let mut screen_vec: Vec<ScreenCell> = vec![];
 
