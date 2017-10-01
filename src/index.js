@@ -173,7 +173,7 @@ ws.on('connection', (ws, request) => {
         internal += encodeAsCodePoint(0)
         internal += encodeAsCodePoint(0)
         internal += encodeAsCodePoint(0)
-        internal += encodeAsCodePoint(Math.round(os.freemem() / 1000))
+        internal += encodeAsCodePoint(Math.round(os.freemem() / 1000000))
         internal += encodeAsCodePoint(connections)
       } else internal = lastInternal
     }
