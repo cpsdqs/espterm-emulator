@@ -72,7 +72,7 @@ app.get('/cfg/wifi/scan', (req, res) => {
   }))
 })
 
-app.get('/system/ping', (req, res) => {
+app.get('/api/v1/ping', (req, res) => {
   res.send('pong')
 })
 

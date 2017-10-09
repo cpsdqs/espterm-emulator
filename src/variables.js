@@ -29,6 +29,7 @@ module.exports = {
   default_fg: 7,
   default_bg: 0,
   want_all_fn: 0,
+  backdrop: '',
 
   vers_fw: packageInfo.version,
   date: '— well, not built, but started ' + getISODate(),
@@ -78,6 +79,9 @@ module.exports = {
   loopback: 0,
   cursor_shape: 1,
   crlf_mode: 0,
+  allow_decopt_12: 0,
+  ascii_debug: 0,
+  debugbar: 0,
 
   ap_enable: 1,
   ap_ssid: 'THIS-wontactuallydoanything',
