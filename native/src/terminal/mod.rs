@@ -580,7 +580,7 @@ impl Terminal {
     pub fn get_scroll_margin(&self) -> String {
         let mut result = String::new();
         result.push(encode_as_code_point(self.state.scroll_margin_top));
-        result.push(encode_as_code_point(self.state.scroll_margin_bottom));
+        result.push(encode_as_code_point(self.state.scroll_margin_bottom - 1));
         result
     }
 
