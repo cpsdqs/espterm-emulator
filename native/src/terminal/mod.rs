@@ -292,7 +292,7 @@ impl Terminal {
             self.state.cursor.x = 0;
             self.new_line();
         }
-        let mut cell = &mut self.state.buffer.lines[self.state.cursor.y as usize][self.state.cursor.x as usize];
+        let cell = &mut self.state.buffer.lines[self.state.cursor.y as usize][self.state.cursor.x as usize];
         cell.text = character;
         cell.style = self.state.style.clone();
         self.state.cursor.x += 1;
@@ -314,7 +314,7 @@ impl Terminal {
 
     pub fn delete_forward(&mut self, count: u32) {
         let count = std::cmp::min(count, self.width - (self.state.cursor.x as u32));
-        let mut line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
+        let line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
         for i in (self.state.cursor.x as u32)..self.width {
             let x = i + count;
             if x >= self.width {
@@ -330,7 +330,7 @@ impl Terminal {
 
     pub fn erase_forward(&mut self, count: u32) {
         let end_index = std::cmp::min(self.width, self.state.cursor.x as u32 + count);
-        let mut line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
+        let line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
         for i in (self.state.cursor.x as u32)..end_index {
             line[i as usize] = ScreenCell {
                 text: ' ',
@@ -340,7 +340,7 @@ impl Terminal {
     }
 
     pub fn insert_blanks(&mut self, count: u32) {
-        let mut line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
+        let line = &mut self.state.buffer.lines[self.state.cursor.y as usize];
         let end_x = self.state.cursor.x + (count as i32) - 1;
         for i in (self.state.cursor.x..(self.width as i32)).rev() {
             let x = i - (count as i32);

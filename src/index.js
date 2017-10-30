@@ -105,6 +105,15 @@ let getTitleStringFor = function (title) {
   return `T${title}` + buttons.map(name => '\x01' + name).join('')
 }
 
+let encodeColor = color => {
+    if (color < 256) {
+        return encodeAsCodePoint(color);
+    } else {
+        let color = color - 256;
+        return encodeAsCodePoint(color & 0xFFF | 0x10000) + encodeAsCodePoint((color >> 12) & 0xFFF)
+    }
+}
+
 app.get('/term/init', (req, res) => {
   res.send(getUpdateString())
 })
@@ -137,6 +146,7 @@ ws.on('connection', (ws, request) => {
   console.log(`connected from ${ip} (${connections} connection${connections === 1 ? '' : 's'})`)
 
   let lastAttributes = null
+  let lastStaticOpts = null
   let lastStateID = null
   let lastScreen = null
   let lastBellID = getBellID()
@@ -156,6 +166,7 @@ ws.on('connection', (ws, request) => {
 
     // check what changed
     let attributes = getAttributes()
+    let staticOpts = variables.font_stack + variables.font_size
     let stateID = getStateID() // tracks screen updates
     let bellID = getBellID()
     let title = getTitle()
@@ -170,7 +181,11 @@ ws.on('connection', (ws, request) => {
         internal += encodeAsCodePoint(attrs)
         internal += encodeAsCodePoint(0)
         internal += shell.terminal.getScrollMargin()
+        // charset
         internal += encodeAsCodePoint(0)
+        internal += encodeAsCodePoint(0)
+        internal += encodeAsCodePoint(0)
+        // cursor fg/bg
         internal += encodeAsCodePoint(0)
         internal += encodeAsCodePoint(0)
         internal += encodeAsCodePoint(Math.round(os.freemem() / 1000000))
@@ -190,11 +205,19 @@ ws.on('connection', (ws, request) => {
       let defaultBG = variables.default_bg
       if (defaultFG.toString().match(/^#[\da-f]{6}$/i)) defaultFG = parseInt(defaultFG.substr(1), 16) + 256
       if (defaultBG.toString().match(/^#[\da-f]{6}$/i)) defaultBG = parseInt(defaultBG.substr(1), 16) + 256
-      data += encodeAsCodePoint(defaultFG & 0xFFFF)
-      data += encodeAsCodePoint((defaultFG >> 16))
-      data += encodeAsCodePoint(defaultBG & 0xFFFF)
-      data += encodeAsCodePoint((defaultBG >> 16))
+      data += encodeColor(defaultFG)
+      data += encodeColor(defaultBG)
       data += encodeAsCodePoint(attributes)
+      topicData.push(data)
+    }
+    if (staticOpts !== lastStaticOpts) {
+      lastStaticOpts = staticOpts
+
+      // topicFlags |= topics.staticOpts
+
+      let data = 'P'
+      data += variables.font_stack + '\x01'
+      data += encodeAsCodePoint(variables.font_size)
       topicData.push(data)
     }
     if (title !== lastTitle) {
@@ -205,7 +228,7 @@ ws.on('connection', (ws, request) => {
     if (!sentButtons) {
       sentButtons = true
       topicFlags |= topics.changeButtons
-      topicData.push(`B${encodeAsCodePoint(5)}1\x012\x013\x014\x015\x01`)
+      topicData.push(`B${encodeAsCodePoint(5)}\x011\x01\x012\x01\x013\x01\x014\x01\x015\x01`)
     }
     if (bellID !== lastBellID) {
       lastBellID = bellID

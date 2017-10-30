@@ -7,8 +7,8 @@ const io = require('../native')
 let emitter = module.exports = new EventEmitter()
 
 let options = {
-  width: 80,
-  height: 25,
+  width: 100,
+  height: 36,
   cursorKeysAppMode: false,
   numpadKeysAppMode: false,
   functionKeysMode: false,
