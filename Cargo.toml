@@ -1,0 +1,11 @@
+[package]
+name = "espterm-emulator"
+version = "0.1.0"
+authors = ["cpsdqs <cpsdqs@gmail.com>"]
+
+[dependencies]
+libc = "0.2"
+pty = "0.2"
+ws = "0.7"
+regex = "1.0"
+lazy_static = "1.0"
