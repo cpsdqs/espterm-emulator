@@ -501,11 +501,11 @@ impl Terminal {
         self.state.state_id += 1;
     }
 
-    pub fn state_id(&mut self) -> u32 {
-        // hackity hack
-        if self.state.rainbow {
-            self.state.state_id += 1
-        }
+    pub fn is_rainbow(&self) -> bool {
+        self.state.rainbow
+    }
+
+    pub fn state_id(&self) -> u32 {
         self.state.state_id
     }
 
@@ -619,7 +619,7 @@ impl Terminal {
         let mut right = 0;
         let mut bottom = 0;
 
-        let screen_updates = self.screen_updates(if full_update {
+        let screen_updates = self.screen_updates(if full_update || self.state.rainbow {
             &[]
         } else {
             &self.state.last_screen

@@ -420,7 +420,7 @@ fn main() {
                     state.prev_cursor = cursor;
                 }
 
-                if state_id != state.prev_state_id {
+                if state_id != state.prev_state_id || terminal.is_rainbow() {
                     let elapsed = start_time.elapsed();
                     let t =
                         elapsed.as_secs() as f64 + elapsed.subsec_nanos() as f64 / 1_000_000_000.;
