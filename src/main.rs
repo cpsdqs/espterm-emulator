@@ -53,11 +53,11 @@ struct ServerState {
     prev_bell_id: u32,
     prev_title: String,
     prev_cursor: String,
-    // TODO: internal debug info
 }
 
 struct ConnHandler {
     id: u64,
+    out: Arc<ws::Sender>,
     state: Arc<Mutex<ServerState>>,
     shell_in: mpsc::Sender<Vec<u8>>,
 }
@@ -162,6 +162,15 @@ impl ws::Handler for ConnHandler {
         }
     }
 
+    fn on_open(&mut self, shake: ws::Handshake) -> ws::Result<()> {
+        let mut state = self.state.lock().unwrap();
+        println!("+ connection from {:?}", shake.peer_addr);
+        state.clients.insert(self.id, Arc::clone(&self.out));
+        state.new_clients.push(self.id);
+
+        Ok(())
+    }
+
     fn on_message(&mut self, message: ws::Message) -> ws::Result<()> {
         if let ws::Message::Text(message) = message {
             if message.len() < 2 {
@@ -233,6 +242,7 @@ impl ws::Handler for ConnHandler {
 
     fn on_close(&mut self, _: ws::CloseCode, _: &str) {
         let mut state = self.state.lock().unwrap();
+        println!("− connection");
         state.clients.remove(&self.id);
     }
 }
@@ -271,10 +281,9 @@ fn main() {
                 let mut state = state_clone.lock().unwrap();
                 state.id_counter += 1;
                 let id = state.id_counter;
-                state.clients.insert(id, Arc::clone(&out));
-                state.new_clients.push(id);
                 ConnHandler {
                     id,
+                    out,
                     state: Arc::clone(&state_clone),
                     shell_in: shell_in.clone(),
                 }
@@ -333,12 +342,16 @@ fn main() {
                     state.prev_cursor = "".into();
                 }
 
-                if heartbeat_time.elapsed().as_secs() > 1 {
+                let update_debug = if heartbeat_time.elapsed().as_secs() > 1 {
                     for (_, client) in &state.clients {
                         client.send(".").unwrap();
                     }
                     heartbeat_time = time::Instant::now();
-                }
+
+                    true
+                } else {
+                    false
+                };
 
                 let attrs = terminal.attributes();
                 let static_opts =
@@ -350,6 +363,30 @@ fn main() {
 
                 let mut topic_flags = 0;
                 let mut content = String::new();
+
+                if update_debug {
+                    topic_flags |= TOPIC_INTERNAL;
+                    content.push('D');
+                    content.push(terminal::encode_as_code_point(0)); // attrs
+                    content.push(terminal::encode_as_code_point(0));
+                    let scroll_margin = terminal.scroll_margin();
+                    content.push(scroll_margin[0]);
+                    content.push(scroll_margin[1]);
+                    // charset
+                    content.push(terminal::encode_as_code_point(0));
+                    content.push('?');
+                    content.push('?');
+
+                    // cursor fg/bg
+                    content.push(terminal::encode_as_code_point(0));
+                    content.push(terminal::encode_as_code_point(0));
+
+                    // free memory
+                    content.push(terminal::encode_as_code_point(999999));
+
+                    // connection count
+                    content.push(terminal::encode_as_code_point(state.clients.len() as u32));
+                }
 
                 if attrs != state.prev_attrs {
                     state.prev_attrs = attrs;
@@ -447,6 +484,8 @@ fn main() {
             thread::sleep(time::Duration::new(0, 16_666_667));
         }
     } else {
+        // pty child thread
+
         // periodically check if parent is dead
         thread::spawn(|| loop {
             if unsafe { libc::getppid() } == 1 {

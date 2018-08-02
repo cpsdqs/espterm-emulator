@@ -565,11 +565,11 @@ impl Terminal {
         self.state.track_mouse
     }
 
-    pub fn scroll_margin(&self) -> String {
-        let mut result = String::new();
-        result.push(encode_as_code_point(self.state.scroll_margin_top));
-        result.push(encode_as_code_point(self.state.scroll_margin_bottom - 1));
-        result
+    pub fn scroll_margin(&self) -> [char; 2] {
+        [
+            encode_as_code_point(self.state.scroll_margin_top),
+            encode_as_code_point(self.state.scroll_margin_bottom - 1),
+        ]
     }
 
     pub fn reset_partial_screen(&mut self) {
