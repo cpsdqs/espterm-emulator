@@ -26,6 +26,20 @@ impl From<i32> for ClearType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LineSize {
+    Normal,
+    DoubleWidth,
+    DoubleHeightTop,
+    DoubleHeightBottom,
+}
+
+impl Default for LineSize {
+    fn default() -> LineSize {
+        LineSize::Normal
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     SetCursor(u32, u32),
@@ -59,6 +73,7 @@ pub enum Action {
     SetWindowTitle(String),
     SetRainbowMode(bool),
     SetMouseTracking(bool),
+    SetLineSize(LineSize),
     Interrupt,
     Bell,
     Backspace,
@@ -376,9 +391,22 @@ impl SeqParser {
                     }
                 }
             }
-            'B' => (), // I have no idea what it does, but fish uses it plenty
+            '(' => {
+                // I have no idea what it does, but fish uses (B plenty
+            },
             'D' => self.actions.push(Action::MoveCursorLineWithScroll(1)),
             'M' => self.actions.push(Action::MoveCursorLineWithScroll(-1)),
+            '#' => {
+                let mut chars = seq.chars();
+                chars.next(); // skip #
+                match chars.next() {
+                    Some('3') => self.actions.push(Action::SetLineSize(LineSize::DoubleHeightTop)),
+                    Some('4') => self.actions.push(Action::SetLineSize(LineSize::DoubleHeightBottom)),
+                    Some('5') => self.actions.push(Action::SetLineSize(LineSize::Normal)),
+                    Some('6') => self.actions.push(Action::SetLineSize(LineSize::DoubleWidth)),
+                    _ => println!("Unhandled #: {}", seq),
+                }
+            }
             _ => {
                 println!("Unhandled escape: {}", seq);
             }
@@ -400,8 +428,9 @@ impl SeqParser {
             } else if c == ']' && self.seq_type == SequenceType::ESC {
                 self.seq_type = SequenceType::OSC;
                 self.sequence = String::from("]");
-            } else if (c == '(' || c == ')') && self.seq_type == SequenceType::ESC {
+            } else if (c == '(' || c == ')' || c == '#') && self.seq_type == SequenceType::ESC {
                 self.seq_type = SequenceType::OneChar;
+                self.sequence.push(c);
             } else if self.seq_type != SequenceType::None
                 && self.seq_type != SequenceType::ESC
                 && (code_point == 0x1b || code_point == 0x9c || code_point == 0x07)

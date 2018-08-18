@@ -53,6 +53,7 @@ struct ServerState {
     prev_bell_id: u32,
     prev_title: String,
     prev_cursor: String,
+    prev_line_sizes: String,
 }
 
 struct ConnHandler {
@@ -272,6 +273,7 @@ fn main() {
             prev_bell_id: 0,
             prev_title: "".into(),
             prev_cursor: "".into(),
+            prev_line_sizes: "".into(),
         }));
 
         let state_clone = Arc::clone(&state);
@@ -340,6 +342,7 @@ fn main() {
                     state.prev_bell_id = 0;
                     state.prev_title = "".into();
                     state.prev_cursor = "".into();
+                    state.prev_line_sizes = "".into();
                 }
 
                 let update_debug = if heartbeat_time.elapsed().as_secs() > 1 {
@@ -360,6 +363,7 @@ fn main() {
                 let bell_id = terminal.bell_id();
                 let title = terminal.title();
                 let cursor = terminal.cursor();
+                let line_sizes = terminal.line_sizes();
 
                 let mut topic_flags = 0;
                 let mut content = String::new();
@@ -455,6 +459,13 @@ fn main() {
                     content.push('C');
                     content += &cursor;
                     state.prev_cursor = cursor;
+                }
+
+                if line_sizes != state.prev_line_sizes {
+                    // no topic flag for this one it seems, so fake one
+                    topic_flags |= TOPIC_CHANGE_CONTENT_PART;
+                    content += &line_sizes;
+                    state.prev_line_sizes = line_sizes;
                 }
 
                 if state_id != state.prev_state_id || terminal.is_rainbow() {

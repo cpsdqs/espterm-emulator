@@ -1,6 +1,6 @@
 pub mod seq_parser;
 
-use self::seq_parser::{Action, ClearType, SeqParser};
+use self::seq_parser::{Action, ClearType, LineSize, SeqParser};
 use std::{char, f64, mem};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -62,11 +62,15 @@ impl ScreenCell {
 
 struct ScreenBuffer {
     lines: Vec<Vec<ScreenCell>>,
+    line_sizes: Vec<LineSize>,
 }
 
 impl ScreenBuffer {
     fn new(width: usize, height: usize) -> ScreenBuffer {
-        let mut buf = ScreenBuffer { lines: Vec::new() };
+        let mut buf = ScreenBuffer {
+            lines: Vec::new(),
+            line_sizes: Vec::new(),
+        };
         buf.clear(width, height, CellStyle::new());
         buf
     }
@@ -76,20 +80,20 @@ impl ScreenBuffer {
         for _ in 0..width {
             line.push(ScreenCell {
                 text: ' ',
-                style: style.clone(),
+                style,
             })
         }
         line
     }
 
     fn clear(&mut self, width: usize, height: usize, style: CellStyle) {
-        let mut lines: Vec<Vec<ScreenCell>> = Vec::new();
+        self.lines.clear();
+        self.line_sizes.clear();
 
         for _ in 0..height {
-            lines.push(ScreenBuffer::make_line(width, style.clone()))
+            self.lines.push(ScreenBuffer::make_line(width, style));
+            self.line_sizes.push(LineSize::default());
         }
-
-        self.lines = lines;
     }
 }
 
@@ -478,6 +482,7 @@ impl Terminal {
             SetRainbowMode(enabled) => self.state.rainbow = enabled,
             SetBracketedPaste(enabled) => self.state.bracketed_paste = enabled,
             SetMouseTracking(enabled) => self.state.track_mouse = enabled,
+            SetLineSize(size) => self.state.buffer.line_sizes[self.state.cursor.y as usize] = size,
             Bell => self.state.bell_id += 1,
             Backspace => self.move_back(1),
             NewLine => self.new_line(),
@@ -706,6 +711,26 @@ impl Terminal {
             }
         }
 
+        data
+    }
+
+    pub fn line_sizes(&self) -> String {
+        let mut data = String::new();
+
+        let mut index = 0;
+        for size in &self.state.buffer.line_sizes {
+            data.push(encode_as_code_point((index << 3) | match size {
+                LineSize::Normal => 0,
+                LineSize::DoubleWidth => 0b001,
+                LineSize::DoubleHeightTop => 0b011,
+                LineSize::DoubleHeightBottom => 0b101,
+            }));
+            index += 1;
+        }
+
+        let data_count = data.chars().count() as u32;
+        data.insert(0, encode_as_code_point(data_count));
+        data.insert(0, 'H');
         data
     }
 }
