@@ -5,6 +5,10 @@ extern crate ws;
 #[macro_use]
 extern crate lazy_static;
 extern crate qstring;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
 
 mod terminal;
 mod variables;
@@ -75,6 +79,13 @@ impl ConnHandler {
         ws::Response::new(500, "Internal Server Error", b"error".to_vec())
     }
 
+    fn redirect(to: &str) -> ws::Response {
+        let mut res = ws::Response::new(301, "Found", Vec::new());
+        res.headers_mut()
+            .push(("Location".into(), to.bytes().collect()));
+        res
+    }
+
     fn template(path: &Path, vars: &HashMap<String, String>) -> ws::Response {
         match fs::read(path) {
             Ok(bytes) => {
@@ -132,10 +143,7 @@ impl ws::Handler for ConnHandler {
                     }
                 }
 
-                let mut res = ws::Response::new(301, "Found", Vec::new());
-                res.headers_mut()
-                    .push(("Location".into(), captures[1].bytes().collect()));
-                Ok(res)
+                Ok(Self::redirect(&captures[1]))
             }
             "/term/update.ws" => ws::Response::from_request(req),
             path if path.starts_with("/js/")
@@ -167,6 +175,10 @@ impl ws::Handler for ConnHandler {
                 &PathBuf::from("web/cfg_system.tpl"),
                 &state.vars,
             )),
+            "/cfg/gpio" => Ok(Self::template(
+                &PathBuf::from("web/cfg_gpio.tpl"),
+                &state.vars,
+            )),
             "/cfg/wifi" => Ok(Self::template(
                 &PathBuf::from("web/cfg_wifi.tpl"),
                 &state.vars,
@@ -193,7 +205,63 @@ impl ws::Handler for ConnHandler {
             path if path.starts_with("/api/v1/ping") => {
                 Ok(ws::Response::new(200, "OK", b"pong".to_vec()))
             }
-            // TODO: config pages
+            path if path.starts_with("/api/v1/gpio") => {
+                #[derive(Serialize, Deserialize, Default)]
+                struct GPIOState {
+                    io2: u8,
+                    io4: u8,
+                    io5: u8,
+                }
+
+                let mut gpio_state: GPIOState =
+                    serde_json::from_str(&state.vars["gpio_initial"]).unwrap_or_default();
+
+                let qs_pos = match path.find('?') {
+                    Some(pos) => pos + 1,
+                    None => return Ok(Self::server_error()),
+                };
+                for (key, value) in qstring::QString::from(&path[qs_pos..]).into_iter() {
+                    let value_u8 = if value == "1" { 1 } else { 0 };
+                    match &*key {
+                        "do2" => gpio_state.io2 = value_u8,
+                        "do4" => gpio_state.io4 = value_u8,
+                        "do5" => gpio_state.io5 = value_u8,
+                        _ => (),
+                    }
+                }
+
+                state.vars.insert(
+                    "gpio_initial".into(),
+                    serde_json::to_string(&gpio_state).unwrap(),
+                );
+
+                Ok(ws::Response::new(
+                    200,
+                    "OK",
+                    state.vars["gpio_initial"].bytes().collect(),
+                ))
+            }
+            "/api/v1/clear" => {
+                // may or may not do anything
+                self.shell_in.send(b"\x1bc".to_vec()).unwrap();
+                Ok(Self::redirect("/cfg/term"))
+            }
+            "/cfg/system/restore_defaults" | "/cfg/system/restore_hard" => {
+                state.vars = variables::defaults();
+                Ok(Self::redirect("/cfg/system"))
+            }
+            path if path.starts_with("/cfg/system/write_defaults") => {
+                Ok(Self::redirect("/cfg/system"))
+            }
+            "/cfg/system/export" => Ok(ws::Response::new(
+                200,
+                "OK",
+                serde_json::to_string(&state.vars)
+                    .unwrap()
+                    .bytes()
+                    .collect(),
+            )),
+            path if path.starts_with("/cfg/system/import") => Ok(Self::redirect("/cfg/system")),
             _ => Ok(Self::not_found()),
         }
     }
@@ -444,7 +512,8 @@ fn main() {
                     content.push(terminal::encode_as_code_point(state.clients.len() as u32));
                 }
 
-                let size_changed = terminal.width != state.prev_width || terminal.height != state.prev_height;
+                let size_changed =
+                    terminal.width != state.prev_width || terminal.height != state.prev_height;
 
                 if attrs != state.prev_attrs || size_changed {
                     state.prev_attrs = attrs;

@@ -80,6 +80,10 @@ pub fn defaults() -> HashMap<String, String> {
         def_admin_pw: "horse",
         pwlock: "0",
         access_name: "root",
+        gpio2_conf: "1",
+        gpio4_conf: "1",
+        gpio5_conf: "1",
+        gpio_initial: "{\"io2\":0,\"io4\":0,\"io5\":0}",
 
         vers_fw: env!("CARGO_PKG_VERSION"),
         date: "some day",

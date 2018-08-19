@@ -1,8 +1,8 @@
-pub mod seq_parser;
 pub mod charsets;
+pub mod seq_parser;
 
-use self::seq_parser::{Action, ClearType, LineSize, CodePage, SeqParser};
 use self::charsets::{CODE_PAGE_0, CODE_PAGE_1};
+use self::seq_parser::{Action, ClearType, CodePage, LineSize, SeqParser};
 use std::{char, f64, mem};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -316,7 +316,7 @@ impl Terminal {
                     } else {
                         $c
                     }
-                }}
+                }};
             }
 
             match code_page {
@@ -325,7 +325,9 @@ impl Terminal {
                 CodePage::DECSpecialChars => code_page_lookup!(CODE_PAGE_0, c),
                 CodePage::DOS437 => code_page_lookup!(CODE_PAGE_1, c),
             }
-        } else { c };
+        } else {
+            c
+        };
         self.state.buffer.lines[self.state.cursor.y as usize][self.state.cursor.x as usize]
             .set(c, self.state.style);
         self.state.cursor.x += 1;

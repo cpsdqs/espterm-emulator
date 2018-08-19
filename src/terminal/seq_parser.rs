@@ -449,7 +449,9 @@ impl SeqParser {
                 };
 
                 match chars.next() {
-                    Some('0') => self.actions.push(Action::SetCodePage(g, CodePage::DECSpecialChars)),
+                    Some('0') => self
+                        .actions
+                        .push(Action::SetCodePage(g, CodePage::DECSpecialChars)),
                     Some('1') => self.actions.push(Action::SetCodePage(g, CodePage::DOS437)),
                     Some('A') => self.actions.push(Action::SetCodePage(g, CodePage::UK)),
                     Some('B') => self.actions.push(Action::SetCodePage(g, CodePage::USASCII)),
@@ -476,6 +478,13 @@ impl SeqParser {
                         .push(Action::SetLineSize(LineSize::DoubleWidth)),
                     _ => println!("Unhandled #: {}", seq),
                 }
+            }
+            'c' => {
+                self.drain_actions();
+                self.reset_state();
+                self.actions.push(Action::SetCursor(0, 0));
+                self.actions.push(Action::ResetStyle);
+                self.actions.push(Action::ClearScreen(ClearType::All));
             }
             _ => {
                 println!("Unhandled escape: {}", seq);
