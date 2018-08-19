@@ -4,6 +4,7 @@ extern crate regex;
 extern crate ws;
 #[macro_use]
 extern crate lazy_static;
+extern crate qstring;
 
 mod terminal;
 mod variables;
@@ -47,6 +48,8 @@ struct ServerState {
     new_clients: Vec<u64>,
     vars: HashMap<String, String>,
     id_counter: u64,
+    prev_width: u32,
+    prev_height: u32,
     prev_attrs: u32,
     prev_static_opts: String,
     prev_state_id: u32,
@@ -78,7 +81,8 @@ impl ConnHandler {
                 let mut contents = String::from(String::from_utf8_lossy(&bytes));
                 contents = apply_template(&contents, vars);
                 let mut res = ws::Response::new(200, "OK", contents.bytes().collect::<Vec<_>>());
-                res.headers_mut().push(("Content-Type".into(), b"text/html; charset=utf-8".to_vec()));
+                res.headers_mut()
+                    .push(("Content-Type".into(), b"text/html; charset=utf-8".to_vec()));
                 res
             }
             Err(_) => Self::server_error(),
@@ -89,15 +93,20 @@ impl ConnHandler {
         if let Some(ext) = file_path.extension() {
             if let Some(ext) = ext.to_str() {
                 match ext {
-                    "html" => res.headers_mut()
+                    "html" => res
+                        .headers_mut()
                         .push(("Content-Type".into(), b"text/html; charset=utf-8".to_vec())),
-                    "css" => res.headers_mut()
+                    "css" => res
+                        .headers_mut()
                         .push(("Content-Type".into(), b"text/css; charset=utf-8".to_vec())),
                     "js" => res.headers_mut().push((
                         "Content-Type".into(),
                         b"application/javascript; charset=utf-8".to_vec(),
                     )),
-                    "svg" => res.headers_mut().push(("Content-Type".into(), b"image/svg+xml; charset=utf-8".to_vec())),
+                    "svg" => res.headers_mut().push((
+                        "Content-Type".into(),
+                        b"image/svg+xml; charset=utf-8".to_vec(),
+                    )),
                     _ => (),
                 }
             }
@@ -108,14 +117,25 @@ impl ConnHandler {
 impl ws::Handler for ConnHandler {
     fn on_request(&mut self, req: &ws::Request) -> ws::Result<(ws::Response)> {
         lazy_static! {
-            static ref CFG_SET_RE: Regex = Regex::new(r"^/cfg/\w+/set").unwrap();
+            static ref CFG_SET_RE: Regex = Regex::new(r"^(/cfg/\w+)/set(.*)").unwrap();
         }
 
-        let state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
 
         match req.resource() {
             path if CFG_SET_RE.is_match(path) => {
-                Ok(ws::Response::new(200, "OK", b"not implemented".to_vec()))
+                let captures = CFG_SET_RE.captures(path).unwrap();
+
+                for (key, value) in qstring::QString::from(&captures[2]).into_iter() {
+                    if state.vars.contains_key(&key) {
+                        state.vars.insert(key, value);
+                    }
+                }
+
+                let mut res = ws::Response::new(301, "Found", Vec::new());
+                res.headers_mut()
+                    .push(("Location".into(), captures[1].bytes().collect()));
+                Ok(res)
             }
             "/term/update.ws" => ws::Response::from_request(req),
             path if path.starts_with("/js/")
@@ -135,14 +155,28 @@ impl ws::Handler for ConnHandler {
                 }
             }
             "/" => Ok(Self::template(&PathBuf::from("web/term.tpl"), &state.vars)),
-            "/cfg/term" => Ok(Self::template(&PathBuf::from("web/cfg_term.tpl"), &state.vars)),
-            "/cfg/network" => Ok(Self::template(&PathBuf::from("web/cfg_network.tpl"), &state.vars)),
-            "/cfg/system" => Ok(Self::template(&PathBuf::from("web/cfg_system.tpl"), &state.vars)),
-            "/cfg/wifi" => Ok(Self::template(&PathBuf::from("web/cfg_wifi.tpl"), &state.vars)),
+            "/cfg/term" => Ok(Self::template(
+                &PathBuf::from("web/cfg_term.tpl"),
+                &state.vars,
+            )),
+            "/cfg/network" => Ok(Self::template(
+                &PathBuf::from("web/cfg_network.tpl"),
+                &state.vars,
+            )),
+            "/cfg/system" => Ok(Self::template(
+                &PathBuf::from("web/cfg_system.tpl"),
+                &state.vars,
+            )),
+            "/cfg/wifi" => Ok(Self::template(
+                &PathBuf::from("web/cfg_wifi.tpl"),
+                &state.vars,
+            )),
             "/help" => Ok(Self::template(&PathBuf::from("web/help.html"), &state.vars)),
             "/about" => Ok(Self::template(&PathBuf::from("web/about.tpl"), &state.vars)),
-            path if path.starts_with("/cfg/wifi/scan") => {
-                Ok(ws::Response::new(200, "OK", b"{
+            path if path.starts_with("/cfg/wifi/scan") => Ok(ws::Response::new(
+                200,
+                "OK",
+                b"{
                     \"result\": {
                       \"inProgress\": 0,
                       \"APs\": [
@@ -153,8 +187,9 @@ impl ws::Handler for ConnHandler {
                         }
                       ]
                     }
-                }".to_vec()))
-            }
+                }"
+                    .to_vec(),
+            )),
             path if path.starts_with("/api/v1/ping") => {
                 Ok(ws::Response::new(200, "OK", b"pong".to_vec()))
             }
@@ -248,10 +283,14 @@ impl ws::Handler for ConnHandler {
     }
 }
 
+const TERM_WIDTH: u32 = 100;
+const TERM_HEIGHT: u32 = 36;
+
 fn main() {
     let fork = Fork::from_ptmx().unwrap();
 
     if let Some(mut master) = fork.is_parent().ok() {
+        let slave_fd;
         unsafe {
             let fd = master.as_raw_fd();
             let flags = libc::fcntl(fd, libc::F_GETFL as i32, 0);
@@ -259,6 +298,17 @@ fn main() {
                 panic!("PTY: wrong fd?");
             }
             libc::fcntl(fd, libc::F_SETFL as i32, flags | libc::O_NONBLOCK);
+            master.grantpt().unwrap();
+            master.unlockpt().unwrap();
+            let slave_name = master.ptsname().unwrap();
+            slave_fd = libc::open(slave_name, libc::O_RDWR | libc::O_NOCTTY);
+            let win_size = libc::winsize {
+                ws_col: TERM_WIDTH as u16,
+                ws_row: TERM_HEIGHT as u16,
+                ws_xpixel: 0,
+                ws_ypixel: 0,
+            };
+            libc::ioctl(slave_fd, libc::TIOCSWINSZ, &win_size);
         }
 
         let (shell_in, shell_recv) = mpsc::channel();
@@ -267,6 +317,8 @@ fn main() {
             new_clients: Vec::new(),
             vars: variables::defaults(),
             id_counter: 0,
+            prev_width: 0,
+            prev_height: 0,
             prev_attrs: 0,
             prev_static_opts: "".into(),
             prev_state_id: 0,
@@ -301,7 +353,7 @@ fn main() {
         const TOPIC_INTERNAL: u8 = 1 << 6;
         const TOPIC_BELL: u8 = 1 << 7;
 
-        let mut terminal = terminal::Terminal::new(80, 24);
+        let mut terminal = terminal::Terminal::new(TERM_WIDTH, TERM_HEIGHT);
         let mut buf = [0; 4096];
         let mut heartbeat_time = time::Instant::now();
         let start_time = time::Instant::now();
@@ -377,9 +429,9 @@ fn main() {
                     content.push(scroll_margin[0]);
                     content.push(scroll_margin[1]);
                     // charset
-                    content.push(terminal::encode_as_code_point(0));
-                    content.push('?');
-                    content.push('?');
+                    content.push(terminal::encode_as_code_point(terminal.current_code_page()));
+                    content.push(terminal.get_code_page(0));
+                    content.push(terminal.get_code_page(1));
 
                     // cursor fg/bg
                     content.push(terminal::encode_as_code_point(0));
@@ -392,12 +444,29 @@ fn main() {
                     content.push(terminal::encode_as_code_point(state.clients.len() as u32));
                 }
 
-                if attrs != state.prev_attrs {
+                let size_changed = terminal.width != state.prev_width || terminal.height != state.prev_height;
+
+                if attrs != state.prev_attrs || size_changed {
                     state.prev_attrs = attrs;
+
+                    if size_changed {
+                        unsafe {
+                            let win_size = libc::winsize {
+                                ws_col: terminal.width as u16,
+                                ws_row: terminal.height as u16,
+                                ws_xpixel: 0,
+                                ws_ypixel: 0,
+                            };
+                            libc::ioctl(slave_fd, libc::TIOCSWINSZ, &win_size);
+                        }
+                        state.prev_width = terminal.width;
+                        state.prev_height = terminal.height;
+                    }
+
                     topic_flags |= TOPIC_CHANGE_SCREEN_OPTS;
                     content.push('O');
-                    content.push(terminal::encode_as_code_point(24));
-                    content.push(terminal::encode_as_code_point(80));
+                    content.push(terminal::encode_as_code_point(terminal.height));
+                    content.push(terminal::encode_as_code_point(terminal.width));
                     content.push(terminal::encode_as_code_point(
                         state.vars["theme"].parse().unwrap_or(0),
                     ));

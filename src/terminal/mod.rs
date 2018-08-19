@@ -1,6 +1,8 @@
 pub mod seq_parser;
+pub mod charsets;
 
-use self::seq_parser::{Action, ClearType, LineSize, SeqParser};
+use self::seq_parser::{Action, ClearType, LineSize, CodePage, SeqParser};
+use self::charsets::{CODE_PAGE_0, CODE_PAGE_1};
 use std::{char, f64, mem};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -78,10 +80,7 @@ impl ScreenBuffer {
     fn make_line(width: usize, style: CellStyle) -> Vec<ScreenCell> {
         let mut line: Vec<ScreenCell> = Vec::with_capacity(width);
         for _ in 0..width {
-            line.push(ScreenCell {
-                text: ' ',
-                style,
-            })
+            line.push(ScreenCell { text: ' ', style })
         }
         line
     }
@@ -93,6 +92,20 @@ impl ScreenBuffer {
         for _ in 0..height {
             self.lines.push(ScreenBuffer::make_line(width, style));
             self.line_sizes.push(LineSize::default());
+        }
+    }
+
+    fn resize_lossy(&mut self, width: usize, height: usize, style: CellStyle) {
+        let old_lines = self.lines.clone();
+        let old_line_sizes = self.line_sizes.clone();
+
+        self.clear(width, height, style);
+
+        for y in 0..old_lines.len().min(height) {
+            for x in 0..old_lines[0].len().min(width) {
+                self.lines[y][x] = old_lines[y][x];
+            }
+            self.line_sizes[y] = old_line_sizes[y];
         }
     }
 }
@@ -112,6 +125,9 @@ struct TerminalState {
     title: String,
     bell_id: u32,
     bracketed_paste: bool,
+    reverse_video: bool,
+    charset: u8,
+    charsets: Vec<CodePage>,
     last_screen: Vec<ScreenCell>,
 }
 
@@ -132,6 +148,9 @@ impl TerminalState {
             title: String::new(),
             bell_id: 0,
             bracketed_paste: false,
+            reverse_video: false,
+            charset: 0,
+            charsets: vec![CodePage::USASCII, CodePage::USASCII],
             last_screen: Vec::new(),
         }
     }
@@ -266,7 +285,8 @@ impl Terminal {
 
     pub fn clamp_cursor(&mut self) {
         self.state.cursor.x = self.state.cursor.x.max(0).min(self.width as i32);
-        self.state.cursor.y = self.state
+        self.state.cursor.y = self
+            .state
             .cursor
             .y
             .max(0)
@@ -285,6 +305,27 @@ impl Terminal {
             self.state.cursor.x = 0;
             self.new_line();
         }
+        let c = if (c as u32) < 128 {
+            // check code page
+            let code_page = self.state.charsets[self.state.charset as usize];
+
+            macro_rules! code_page_lookup {
+                ($cp:expr, $c:expr) => {{
+                    if $cp.begin <= ($c as u32) && ($c as u32) <= $cp.end {
+                        $cp.data[($c as u32 - $cp.begin) as usize]
+                    } else {
+                        $c
+                    }
+                }}
+            }
+
+            match code_page {
+                CodePage::USASCII => c,
+                CodePage::UK => c, // technically incorrect
+                CodePage::DECSpecialChars => code_page_lookup!(CODE_PAGE_0, c),
+                CodePage::DOS437 => code_page_lookup!(CODE_PAGE_1, c),
+            }
+        } else { c };
         self.state.buffer.lines[self.state.cursor.y as usize][self.state.cursor.x as usize]
             .set(c, self.state.style);
         self.state.cursor.x += 1;
@@ -480,9 +521,12 @@ impl Terminal {
             ResetColorBG => self.state.style.attrs &= !(1 << 1),
             SetWindowTitle(title) => self.state.title = title,
             SetRainbowMode(enabled) => self.state.rainbow = enabled,
+            SetReverseVideo(enabled) => self.state.reverse_video = enabled,
             SetBracketedPaste(enabled) => self.state.bracketed_paste = enabled,
             SetMouseTracking(enabled) => self.state.track_mouse = enabled,
             SetLineSize(size) => self.state.buffer.line_sizes[self.state.cursor.y as usize] = size,
+            SetCodePage(i, page) => self.state.charsets[i as usize] = page,
+            SetCharSet(i) => self.state.charset = i,
             Bell => self.state.bell_id += 1,
             Backspace => self.move_back(1),
             NewLine => self.new_line(),
@@ -491,6 +535,21 @@ impl Terminal {
                 for character in data.chars() {
                     self.write_char(character);
                 }
+            }
+            Resize(width, height) => {
+                self.state.scroll_margin_bottom =
+                    height.saturating_sub(self.height - self.state.scroll_margin_bottom);
+                self.width = width;
+                self.height = height;
+                self.state
+                    .buffer
+                    .resize_lossy(width as usize, height as usize, self.state.style);
+                self.state.alt_buffer.resize_lossy(
+                    width as usize,
+                    height as usize,
+                    self.state.style,
+                );
+                self.clamp_cursor();
             }
             Interrupt => (),
             Tab => (),
@@ -562,8 +621,19 @@ impl Terminal {
         if self.state.bracketed_paste {
             attributes |= 1 << 13;
         }
+        if self.state.reverse_video {
+            attributes |= 1 << 14;
+        }
 
         attributes
+    }
+
+    pub fn current_code_page(&self) -> u32 {
+        self.state.charset as u32
+    }
+
+    pub fn get_code_page(&self, i: usize) -> char {
+        self.state.charsets[i].as_char()
     }
 
     pub fn is_tracking_mouse(&self) -> bool {
@@ -719,12 +789,14 @@ impl Terminal {
 
         let mut index = 0;
         for size in &self.state.buffer.line_sizes {
-            data.push(encode_as_code_point((index << 3) | match size {
-                LineSize::Normal => 0,
-                LineSize::DoubleWidth => 0b001,
-                LineSize::DoubleHeightTop => 0b011,
-                LineSize::DoubleHeightBottom => 0b101,
-            }));
+            data.push(encode_as_code_point(
+                (index << 3) | match size {
+                    LineSize::Normal => 0,
+                    LineSize::DoubleWidth => 0b001,
+                    LineSize::DoubleHeightTop => 0b011,
+                    LineSize::DoubleHeightBottom => 0b101,
+                },
+            ));
             index += 1;
         }
 

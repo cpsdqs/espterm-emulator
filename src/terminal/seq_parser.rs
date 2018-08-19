@@ -39,6 +39,24 @@ impl Default for LineSize {
         LineSize::Normal
     }
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CodePage {
+    DECSpecialChars,
+    DOS437,
+    UK,
+    USASCII,
+}
+
+impl CodePage {
+    pub fn as_char(self) -> char {
+        match self {
+            CodePage::DECSpecialChars => '0',
+            CodePage::DOS437 => '1',
+            CodePage::UK => 'A',
+            CodePage::USASCII => 'B',
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -69,11 +87,14 @@ pub enum Action {
     SetColorBG(u32),
     ResetColorFG,
     ResetColorBG,
+    SetReverseVideo(bool),
     SetBracketedPaste(bool),
     SetWindowTitle(String),
     SetRainbowMode(bool),
     SetMouseTracking(bool),
     SetLineSize(LineSize),
+    SetCodePage(u8, CodePage),
+    SetCharSet(u8),
     Interrupt,
     Bell,
     Backspace,
@@ -83,6 +104,7 @@ pub enum Action {
     DeleteLine,
     DeleteWord,
     Write(String),
+    Resize(u32, u32),
 }
 
 /// Escape sequence parser.
@@ -165,17 +187,23 @@ impl SeqParser {
                         let x = numbers.get_opt(1).map(|x| x - 1).unwrap_or(0);
                         self.actions.push(Action::SetCursor(x as u32, y as u32));
                     }
-                    'A' => self.actions
+                    'A' => self
+                        .actions
                         .push(Action::MoveCursor(0, -numbers.get_opt(0).unwrap_or(1))),
-                    'B' => self.actions
+                    'B' => self
+                        .actions
                         .push(Action::MoveCursor(0, numbers.get_opt(0).unwrap_or(1))),
-                    'C' => self.actions
+                    'C' => self
+                        .actions
                         .push(Action::MoveCursor(numbers.get_opt(0).unwrap_or(1), 0)),
-                    'D' => self.actions
+                    'D' => self
+                        .actions
                         .push(Action::MoveCursor(-numbers.get_opt(0).unwrap_or(1), 0)),
-                    'E' => self.actions
+                    'E' => self
+                        .actions
                         .push(Action::MoveCursorLine(numbers.get_opt(0).unwrap_or(1))),
-                    'F' => self.actions
+                    'F' => self
+                        .actions
                         .push(Action::MoveCursorLine(-numbers.get_opt(0).unwrap_or(1))),
                     'G' => self.actions.push(Action::SetCursorX(
                         (numbers.get_opt(0).unwrap_or(1) as u32) - 1,
@@ -188,21 +216,28 @@ impl SeqParser {
                         let clear_type: ClearType = numbers.get_opt(0).unwrap_or(0).into();
                         self.actions.push(Action::ClearLine(clear_type));
                     }
-                    'L' => self.actions
+                    'L' => self
+                        .actions
                         .push(Action::InsertLines(numbers.get_opt(0).unwrap_or(1) as u32)),
-                    'M' => self.actions
+                    'M' => self
+                        .actions
                         .push(Action::DeleteLines(numbers.get_opt(0).unwrap_or(1) as u32)),
-                    'P' => self.actions
+                    'P' => self
+                        .actions
                         .push(Action::DeleteForward(numbers.get_opt(0).unwrap_or(1) as u32)),
                     'S' => self.actions.push(Action::Scroll(1)),
                     'T' => self.actions.push(Action::Scroll(-1)),
-                    'X' => self.actions
+                    'X' => self
+                        .actions
                         .push(Action::EraseForward(numbers.get_opt(0).unwrap_or(1) as u32)),
-                    '@' => self.actions
+                    '@' => self
+                        .actions
                         .push(Action::InsertBlanks(numbers.get_opt(0).unwrap_or(1) as u32)),
-                    'd' => self.actions
+                    'd' => self
+                        .actions
                         .push(Action::SetCursorLine(numbers.get_opt(0).unwrap_or(1) as u32)),
-                    'q' => self.actions
+                    'q' => self
+                        .actions
                         .push(Action::SetCursorStyle(numbers.get_opt(0).unwrap_or(1) as u8)),
                     'r' => {
                         let top = numbers.get_opt(0).map(|x| x - 1).unwrap_or(0);
@@ -242,10 +277,12 @@ impl SeqParser {
                                         // remove bold
                                         21 => self.actions.push(Action::RemoveAttrs(1 << 2)),
                                         // remove bold and faint
-                                        22 => self.actions
+                                        22 => self
+                                            .actions
                                             .push(Action::RemoveAttrs((1 << 2) | (1 << 9))),
                                         // remove italic and fraktur
-                                        23 => self.actions
+                                        23 => self
+                                            .actions
                                             .push(Action::RemoveAttrs((1 << 6) | (1 << 10))),
                                         // remove underline
                                         24 => self.actions.push(Action::RemoveAttrs(1 << 3)),
@@ -266,10 +303,12 @@ impl SeqParser {
                                         // reset background
                                         49 => self.actions.push(Action::ResetColorBG),
                                         // set bright foreground
-                                        color @ 90...97 => self.actions
+                                        color @ 90...97 => self
+                                            .actions
                                             .push(Action::SetColorFG((color as u32 % 10) + 8)),
                                         // set bright background
-                                        color @ 100...107 => self.actions
+                                        color @ 100...107 => self
+                                            .actions
                                             .push(Action::SetColorBG((color as u32 % 10) + 8)),
                                         38 | 48 => {
                                             let is_fg = sgr_type == 38;
@@ -345,6 +384,7 @@ impl SeqParser {
                     }
                     'h' | 'l' => {
                         match &*content {
+                            "?5" => self.actions.push(Action::SetReverseVideo(action == 'h')),
                             "?25" => self.actions.push(Action::SetCursorVisible(action == 'h')),
                             "?1000" => self.actions.push(Action::SetMouseTracking(action == 'h')),
                             "?1049" => {
@@ -360,6 +400,15 @@ impl SeqParser {
                             }
                         };
                     }
+                    't' => match numbers.get_opt(0).unwrap_or(0) {
+                        8 => {
+                            let height = numbers.get_opt(1).unwrap_or(24).max(1).min(65535);
+                            let width = numbers.get_opt(2).unwrap_or(80).max(10).min(65535);
+                            self.actions
+                                .push(Action::Resize(width as u32, height as u32));
+                        }
+                        _ => println!("Unhandled ANSI sequence: {}", seq),
+                    },
                     _ => {
                         println!("Unhandled ANSI sequence: {}", seq);
                     }
@@ -391,19 +440,40 @@ impl SeqParser {
                     }
                 }
             }
-            '(' => {
-                // I have no idea what it does, but fish uses (B plenty
-            },
+            '(' | ')' => {
+                let mut chars = seq.chars();
+                let g: u8 = match chars.next().unwrap_or('(') {
+                    '(' => 0,
+                    ')' => 1,
+                    _ => 0,
+                };
+
+                match chars.next() {
+                    Some('0') => self.actions.push(Action::SetCodePage(g, CodePage::DECSpecialChars)),
+                    Some('1') => self.actions.push(Action::SetCodePage(g, CodePage::DOS437)),
+                    Some('A') => self.actions.push(Action::SetCodePage(g, CodePage::UK)),
+                    Some('B') => self.actions.push(Action::SetCodePage(g, CodePage::USASCII)),
+                    _ => println!("Unhandled code page: {}", seq),
+                }
+            }
             'D' => self.actions.push(Action::MoveCursorLineWithScroll(1)),
             'M' => self.actions.push(Action::MoveCursorLineWithScroll(-1)),
+            '\u{f}' => self.actions.push(Action::SetCharSet(0)),
+            '\u{e}' => self.actions.push(Action::SetCharSet(1)),
             '#' => {
                 let mut chars = seq.chars();
                 chars.next(); // skip #
                 match chars.next() {
-                    Some('3') => self.actions.push(Action::SetLineSize(LineSize::DoubleHeightTop)),
-                    Some('4') => self.actions.push(Action::SetLineSize(LineSize::DoubleHeightBottom)),
+                    Some('3') => self
+                        .actions
+                        .push(Action::SetLineSize(LineSize::DoubleHeightTop)),
+                    Some('4') => self
+                        .actions
+                        .push(Action::SetLineSize(LineSize::DoubleHeightBottom)),
                     Some('5') => self.actions.push(Action::SetLineSize(LineSize::Normal)),
-                    Some('6') => self.actions.push(Action::SetLineSize(LineSize::DoubleWidth)),
+                    Some('6') => self
+                        .actions
+                        .push(Action::SetLineSize(LineSize::DoubleWidth)),
                     _ => println!("Unhandled #: {}", seq),
                 }
             }
